@@ -5,6 +5,7 @@ package com.alibaba.rocketmq.broker.topic;
 
 import static org.junit.Assert.assertTrue;
 
+import com.alibaba.rocketmq.broker.transaction.jdbc.JDBCTransactionStoreConfig;
 import org.junit.Test;
 
 import com.alibaba.rocketmq.broker.BrokerController;
@@ -26,7 +27,8 @@ public class TopicConfigManagerTest {
             new BrokerConfig(), //
             new NettyServerConfig(), //
             new NettyClientConfig(), //
-            new MessageStoreConfig());
+            new MessageStoreConfig(),
+                new JDBCTransactionStoreConfig());
         boolean initResult = brokerController.initialize();
         System.out.println("initialize " + initResult);
         brokerController.start();

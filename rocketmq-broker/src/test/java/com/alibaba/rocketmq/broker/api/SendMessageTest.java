@@ -3,6 +3,7 @@
  */
 package com.alibaba.rocketmq.broker.api;
 
+import com.alibaba.rocketmq.broker.transaction.jdbc.JDBCTransactionStoreConfig;
 import org.junit.Test;
 
 import com.alibaba.rocketmq.broker.BrokerController;
@@ -29,7 +30,8 @@ public class SendMessageTest {
             new BrokerConfig(), //
             new NettyServerConfig(), //
             new NettyClientConfig(), //
-            new MessageStoreConfig());
+            new MessageStoreConfig(),
+                new JDBCTransactionStoreConfig());
         boolean initResult = brokerController.initialize();
         System.out.println("initialize " + initResult);
 

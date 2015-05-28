@@ -35,7 +35,7 @@ public class DispatchRequest {
      */
     private final int sysFlag;
     private final long preparedTransactionOffset;
-
+    private final String producerGroup;
 
     public DispatchRequest(//
             final String topic,// 1
@@ -50,7 +50,8 @@ public class DispatchRequest {
              * 事务相关部分
              */
             final int sysFlag,// 9
-            final long preparedTransactionOffset// 10
+            final long preparedTransactionOffset,// 10
+            final String producerGroup //11
     ) {
         this.topic = topic;
         this.queueId = queueId;
@@ -66,6 +67,7 @@ public class DispatchRequest {
          */
         this.sysFlag = sysFlag;
         this.preparedTransactionOffset = preparedTransactionOffset;
+        this.producerGroup = producerGroup;
     }
 
 
@@ -92,6 +94,7 @@ public class DispatchRequest {
          */
         this.sysFlag = 0;
         this.preparedTransactionOffset = 0;
+        this.producerGroup = null;
     }
 
 
@@ -142,5 +145,9 @@ public class DispatchRequest {
 
     public long getPreparedTransactionOffset() {
         return preparedTransactionOffset;
+    }
+
+    public String getProducerGroup() {
+        return producerGroup;
     }
 }

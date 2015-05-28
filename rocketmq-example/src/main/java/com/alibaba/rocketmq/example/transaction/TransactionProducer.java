@@ -16,9 +16,7 @@
 package com.alibaba.rocketmq.example.transaction;
 
 import com.alibaba.rocketmq.client.exception.MQClientException;
-import com.alibaba.rocketmq.client.producer.SendResult;
-import com.alibaba.rocketmq.client.producer.TransactionCheckListener;
-import com.alibaba.rocketmq.client.producer.TransactionMQProducer;
+import com.alibaba.rocketmq.client.producer.*;
 import com.alibaba.rocketmq.common.message.Message;
 
 
@@ -30,7 +28,7 @@ public class TransactionProducer {
     public static void main(String[] args) throws MQClientException, InterruptedException {
 
         TransactionCheckListener transactionCheckListener = new TransactionCheckListenerImpl();
-        TransactionMQProducer producer = new TransactionMQProducer("please_rename_unique_group_name");
+        TransactionMQProducer producer = new TransactionMQProducer("producer_ordermessage_group_name");
         // 事务回查最小并发数
         producer.setCheckThreadPoolMinSize(2);
         // 事务回查最大并发数
@@ -41,16 +39,22 @@ public class TransactionProducer {
         producer.start();
 
         String[] tags = new String[] { "TagA", "TagB", "TagC", "TagD", "TagE" };
+        final String numStr = String.valueOf(System.currentTimeMillis())+"-";
         TransactionExecuterImpl tranExecuter = new TransactionExecuterImpl();
         for (int i = 0; i < 100; i++) {
             try {
                 Message msg =
-                        new Message("TopicTest", tags[i % tags.length], "KEY" + i,
-                            ("Hello RocketMQ " + i).getBytes());
-                SendResult sendResult = producer.sendMessageInTransaction(msg, tranExecuter, null);
-                System.out.println(sendResult);
+                        new Message("TopicTest", tags[i % tags.length], "KEY" + i, ("Hello RocketMQ " + numStr + i).getBytes());
+                //SendResult sendResult = producer.sendMessageInTransaction(msg, tranExecuter, null);
+                SendResult sendResult = producer.sendMessageInTransaction(msg, new LocalTransactionExecuter(){
+                    @Override
+                    public LocalTransactionState executeLocalTransactionBranch(Message msg, Object arg) {
+                        System.out.println(arg);
+                        return LocalTransactionState.COMMIT_MESSAGE;
+                    }
+                }, numStr + i);
 
-                Thread.sleep(10);
+                //Thread.sleep(10);
             }
             catch (MQClientException e) {
                 e.printStackTrace();

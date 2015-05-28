@@ -15,10 +15,10 @@
  */
 package com.alibaba.rocketmq.store.config;
 
-import java.io.File;
-
 import com.alibaba.rocketmq.common.annotation.ImportantField;
 import com.alibaba.rocketmq.store.ConsumeQueue;
+
+import java.io.File;
 
 
 /**

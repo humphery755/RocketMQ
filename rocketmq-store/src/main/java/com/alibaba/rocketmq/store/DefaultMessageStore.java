@@ -15,29 +15,6 @@
  */
 package com.alibaba.rocketmq.store;
 
-import static com.alibaba.rocketmq.store.config.BrokerRole.SLAVE;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.alibaba.rocketmq.common.ServiceThread;
 import com.alibaba.rocketmq.common.SystemClock;
 import com.alibaba.rocketmq.common.ThreadFactoryImpl;
@@ -57,6 +34,25 @@ import com.alibaba.rocketmq.store.index.IndexService;
 import com.alibaba.rocketmq.store.index.QueryOffsetResult;
 import com.alibaba.rocketmq.store.schedule.ScheduleMessageService;
 import com.alibaba.rocketmq.store.stats.BrokerStatsManager;
+import com.alibaba.rocketmq.store.transaction.TransactionRecord;
+import com.alibaba.rocketmq.store.transaction.TransactionStore;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static com.alibaba.rocketmq.store.config.BrokerRole.SLAVE;
 
 
 /**
@@ -91,6 +87,8 @@ public class DefaultMessageStore implements MessageStore {
     private final ReputMessageService reputMessageService;
     // HA服务
     private final HAService haService;
+    // Trascation
+    private final TransactionStore transactionStore;
     // 定时服务
     private final ScheduleMessageService scheduleMessageService;
     // 运行时数据统计
@@ -112,7 +110,8 @@ public class DefaultMessageStore implements MessageStore {
 
 
     public DefaultMessageStore(final MessageStoreConfig messageStoreConfig,
-            final BrokerStatsManager brokerStatsManager) throws IOException {
+            final BrokerStatsManager brokerStatsManager,
+            final TransactionStore transactionStore) throws IOException {
         this.messageStoreConfig = messageStoreConfig;
         this.brokerStatsManager = brokerStatsManager;
         this.allocateMapedFileService = new AllocateMapedFileService();
@@ -129,6 +128,7 @@ public class DefaultMessageStore implements MessageStore {
         this.storeStatsService = new StoreStatsService();
         this.indexService = new IndexService(this);
         this.haService = new HAService(this);
+        this.transactionStore = transactionStore;
 
         switch (this.messageStoreConfig.getBrokerRole()) {
         case SLAVE:
@@ -177,6 +177,10 @@ public class DefaultMessageStore implements MessageStore {
         try {
             boolean lastExitOK = !this.isTempFileExist();
             log.info("last shutdown {}", (lastExitOK ? "normally" : "abnormally"));
+
+            if(this.transactionStore != null) {
+                result = result && transactionStore.start(lastExitOK);
+            }
 
             // load 定时进度
             // 这个步骤要放置到最前面，从CommitLog里Recover定时消息需要依赖加载的定时级别参数
@@ -355,6 +359,9 @@ public class DefaultMessageStore implements MessageStore {
             this.allocateMapedFileService.shutdown();
             if (this.reputMessageService != null) {
                 this.reputMessageService.shutdown();
+            }
+            if(this.transactionStore != null) {
+                transactionStore.shutdown();
             }
             this.storeCheckpoint.flush();
             this.storeCheckpoint.shutdown();
@@ -1635,8 +1642,10 @@ public class DefaultMessageStore implements MessageStore {
         }
 
 
-        private void doDispatch() {
+        private void doDispatch() {//TODO: humphery
             if (!this.requestsRead.isEmpty()) {
+                Map<Long,DispatchRequest> prepareState = new HashMap();
+                List commitState = new ArrayList();
                 for (DispatchRequest req : this.requestsRead) {
 
                     final int tranType = MessageSysFlag.getTransactionValue(req.getSysFlag());
@@ -1648,21 +1657,60 @@ public class DefaultMessageStore implements MessageStore {
                         DefaultMessageStore.this.putMessagePostionInfo(req.getTopic(), req.getQueueId(),
                             req.getCommitLogOffset(), req.getMsgSize(), req.getTagsCode(),
                             req.getStoreTimestamp(), req.getConsumeQueueOffset());
+                        Object obj = prepareState.remove(req.getPreparedTransactionOffset());
+                        if(obj==null)commitState.add(req.getPreparedTransactionOffset());
                         break;
                     case MessageSysFlag.TransactionPreparedType:
+                        prepareState.put(req.getCommitLogOffset(),req);
+                        break;
                     case MessageSysFlag.TransactionRollbackType:
+                        obj = prepareState.remove(req.getPreparedTransactionOffset());
+                        if(obj==null)commitState.add(req.getPreparedTransactionOffset());
                         break;
                     }
+
+                    if(prepareState.size()>10000 || commitState.size()>10000){
+                        preparTransaction(prepareState);
+                        prepareState.clear();
+                        commitTransaction(commitState);
+                        commitState.clear();
+                    }
+
                 }
 
                 if (DefaultMessageStore.this.getMessageStoreConfig().isMessageIndexEnable()) {
                     DefaultMessageStore.this.indexService.putRequest(this.requestsRead.toArray());
                 }
 
+                preparTransaction(prepareState);
+                prepareState.clear();
+                commitTransaction(commitState);
+                commitState.clear();
                 this.requestsRead.clear();
             }
         }
 
+        private void preparTransaction(Map<Long,DispatchRequest> stateTable){
+            if(stateTable.size()==0)return;
+            for(Map.Entry<Long,DispatchRequest> entry:stateTable.entrySet()){
+                TransactionRecord tr=new TransactionRecord();
+                tr.setOffset(entry.getKey());
+                tr.setTranStateOffset(entry.getValue().getConsumeQueueOffset());
+                tr.setPgroupHashCode(entry.getValue().getProducerGroup().hashCode());
+                tr.setMsgSize(entry.getValue().getMsgSize());
+                tr.setTimestamp((int)(entry.getValue().getStoreTimestamp()/1000));
+                DefaultMessageStore.this.transactionStore.put(tr);
+            }
+
+        }
+        private void commitTransaction(List<Long> stateTable){
+            if(stateTable.size()==0)return;
+
+            for(Long pk:stateTable){
+                DefaultMessageStore.this.transactionStore.remove(pk);
+            }
+
+        }
 
         public void run() {
             DefaultMessageStore.log.info(this.getServiceName() + " service started");

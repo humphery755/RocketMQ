@@ -3,7 +3,12 @@
  */
 package com.alibaba.rocketmq.store;
 
-import static org.junit.Assert.assertTrue;
+import com.alibaba.rocketmq.common.message.MessageDecoder;
+import com.alibaba.rocketmq.common.message.MessageExt;
+import com.alibaba.rocketmq.store.config.MessageStoreConfig;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -12,13 +17,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import com.alibaba.rocketmq.common.message.MessageDecoder;
-import com.alibaba.rocketmq.common.message.MessageExt;
-import com.alibaba.rocketmq.store.config.MessageStoreConfig;
+import static org.junit.Assert.assertTrue;
 
 
 public class RecoverTest {
@@ -108,7 +107,7 @@ public class RecoverTest {
         messageStoreConfig.setMapedFileSizeConsumeQueue(100 * 20);
         messageStoreConfig.setMessageIndexEnable(false);
 
-        MessageStore messageStore = new DefaultMessageStore(messageStoreConfig, null);
+        MessageStore messageStore = new DefaultMessageStore(messageStoreConfig, null,null);
         if (first) {
             this.storeWrite1 = messageStore;
         }
@@ -167,7 +166,7 @@ public class RecoverTest {
         messageStoreConfig.setMapedFileSizeConsumeQueue(100 * 20);
         messageStoreConfig.setMessageIndexEnable(false);
 
-        storeRead = new DefaultMessageStore(messageStoreConfig, null);
+        storeRead = new DefaultMessageStore(messageStoreConfig, null,null);
         // 第一步，load已有数据
         boolean loadResult = storeRead.load();
         assertTrue(loadResult);

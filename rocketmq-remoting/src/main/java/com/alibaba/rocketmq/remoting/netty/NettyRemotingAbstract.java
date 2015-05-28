@@ -49,7 +49,7 @@ import com.alibaba.rocketmq.remoting.protocol.RemotingSysResponseCode;
 
 /**
  * Server与Client公用抽象类
- * 
+ *
  * @author shijia.wxr<vintage.wang@gmail.com>
  * @since 2013-7-13
  */
@@ -97,7 +97,7 @@ public abstract class NettyRemotingAbstract {
             }
             else {
                 plog.warn("event queue size[{}] enough, so drop this event {}", this.eventQueue.size(),
-                    event.toString());
+                        event.toString());
             }
         }
 
@@ -113,20 +113,20 @@ public abstract class NettyRemotingAbstract {
                     NettyEvent event = this.eventQueue.poll(3000, TimeUnit.MILLISECONDS);
                     if (event != null && listener != null) {
                         switch (event.getType()) {
-                        case IDLE:
-                            listener.onChannelIdle(event.getRemoteAddr(), event.getChannel());
-                            break;
-                        case CLOSE:
-                            listener.onChannelClose(event.getRemoteAddr(), event.getChannel());
-                            break;
-                        case CONNECT:
-                            listener.onChannelConnect(event.getRemoteAddr(), event.getChannel());
-                            break;
-                        case EXCEPTION:
-                            listener.onChannelException(event.getRemoteAddr(), event.getChannel());
-                            break;
-                        default:
-                            break;
+                            case IDLE:
+                                listener.onChannelIdle(event.getRemoteAddr(), event.getChannel());
+                                break;
+                            case CLOSE:
+                                listener.onChannelClose(event.getRemoteAddr(), event.getChannel());
+                                break;
+                            case CONNECT:
+                                listener.onChannelConnect(event.getRemoteAddr(), event.getChannel());
+                                break;
+                            case EXCEPTION:
+                                listener.onChannelException(event.getRemoteAddr(), event.getChannel());
+                                break;
+                            default:
+                                break;
 
                         }
                     }
@@ -166,13 +166,13 @@ public abstract class NettyRemotingAbstract {
                         RPCHook rpcHook = NettyRemotingAbstract.this.getRPCHook();
                         if (rpcHook != null) {
                             rpcHook
-                                .doBeforeRequest(RemotingHelper.parseChannelRemoteAddr(ctx.channel()), cmd);
+                                    .doBeforeRequest(RemotingHelper.parseChannelRemoteAddr(ctx.channel()), cmd);
                         }
 
                         final RemotingCommand response = pair.getObject1().processRequest(ctx, cmd);
                         if (rpcHook != null) {
                             rpcHook.doAfterResponse(RemotingHelper.parseChannelRemoteAddr(ctx.channel()),
-                                cmd, response);
+                                    cmd, response);
                         }
 
                         if (!cmd.isOnewayRPC()) {
@@ -200,8 +200,8 @@ public abstract class NettyRemotingAbstract {
                         if (!cmd.isOnewayRPC()) {
                             final RemotingCommand response =
                                     RemotingCommand.createResponseCommand(
-                                        RemotingSysResponseCode.SYSTEM_ERROR,//
-                                        RemotingHelper.exceptionSimpleDesc(e));
+                                            RemotingSysResponseCode.SYSTEM_ERROR,//
+                                            RemotingHelper.exceptionSimpleDesc(e));
                             response.setOpaque(cmd.getOpaque());
                             ctx.writeAndFlush(response);
                         }
@@ -225,7 +225,7 @@ public abstract class NettyRemotingAbstract {
                 if (!cmd.isOnewayRPC()) {
                     final RemotingCommand response =
                             RemotingCommand.createResponseCommand(RemotingSysResponseCode.SYSTEM_BUSY,
-                                "too many requests and system thread pool busy, please try another server");
+                                    "too many requests and system thread pool busy, please try another server");
                     response.setOpaque(cmd.getOpaque());
                     ctx.writeAndFlush(response);
                 }
@@ -235,7 +235,7 @@ public abstract class NettyRemotingAbstract {
             String error = " request type " + cmd.getCode() + " not supported";
             final RemotingCommand response =
                     RemotingCommand.createResponseCommand(RemotingSysResponseCode.REQUEST_CODE_NOT_SUPPORTED,
-                        error);
+                            error);
             response.setOpaque(cmd.getOpaque());
             ctx.writeAndFlush(response);
             plog.error(RemotingHelper.parseChannelRemoteAddr(ctx.channel()) + error);
@@ -302,14 +302,14 @@ public abstract class NettyRemotingAbstract {
         final RemotingCommand cmd = msg;
         if (cmd != null) {
             switch (cmd.getType()) {
-            case REQUEST_COMMAND:
-                processRequestCommand(ctx, cmd);
-                break;
-            case RESPONSE_COMMAND:
-                processResponseCommand(ctx, cmd);
-                break;
-            default:
-                break;
+                case REQUEST_COMMAND:
+                    processRequestCommand(ctx, cmd);
+                    break;
+                case RESPONSE_COMMAND:
+                    processResponseCommand(ctx, cmd);
+                    break;
+                default:
+                    break;
             }
         }
     }
@@ -343,7 +343,7 @@ public abstract class NettyRemotingAbstract {
 
 
     public RemotingCommand invokeSyncImpl(final Channel channel, final RemotingCommand request,
-            final long timeoutMillis) throws InterruptedException, RemotingSendRequestException,
+                                          final long timeoutMillis) throws InterruptedException, RemotingSendRequestException,
             RemotingTimeoutException {
         try {
             final ResponseFuture responseFuture =
@@ -372,11 +372,11 @@ public abstract class NettyRemotingAbstract {
             if (null == responseCommand) {
                 if (responseFuture.isSendRequestOK()) {
                     throw new RemotingTimeoutException(RemotingHelper.parseChannelRemoteAddr(channel),
-                        timeoutMillis, responseFuture.getCause());
+                            timeoutMillis, responseFuture.getCause());
                 }
                 else {
                     throw new RemotingSendRequestException(RemotingHelper.parseChannelRemoteAddr(channel),
-                        responseFuture.getCause());
+                            responseFuture.getCause());
                 }
             }
 
@@ -389,7 +389,7 @@ public abstract class NettyRemotingAbstract {
 
 
     public void invokeAsyncImpl(final Channel channel, final RemotingCommand request,
-            final long timeoutMillis, final InvokeCallback invokeCallback) throws InterruptedException,
+                                final long timeoutMillis, final InvokeCallback invokeCallback) throws InterruptedException,
             RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
         boolean acquired = this.semaphoreAsync.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
         if (acquired) {
@@ -423,7 +423,7 @@ public abstract class NettyRemotingAbstract {
                         }
 
                         plog.warn("send a request command to channel <{}> failed.",
-                            RemotingHelper.parseChannelRemoteAddr(channel));
+                                RemotingHelper.parseChannelRemoteAddr(channel));
                         plog.warn(request.toString());
                     }
                 });
@@ -431,8 +431,8 @@ public abstract class NettyRemotingAbstract {
             catch (Exception e) {
                 responseFuture.release();
                 plog.warn(
-                    "send a request command to channel <" + RemotingHelper.parseChannelRemoteAddr(channel)
-                            + "> Exception", e);
+                        "send a request command to channel <" + RemotingHelper.parseChannelRemoteAddr(channel)
+                                + "> Exception", e);
                 throw new RemotingSendRequestException(RemotingHelper.parseChannelRemoteAddr(channel), e);
             }
         }
@@ -443,12 +443,12 @@ public abstract class NettyRemotingAbstract {
             else {
                 String info =
                         String
-                            .format(
-                                "invokeAsyncImpl tryAcquire semaphore timeout, %dms, waiting thread nums: %d semaphoreAsyncValue: %d", //
-                                timeoutMillis,//
-                                this.semaphoreAsync.getQueueLength(),//
-                                this.semaphoreAsync.availablePermits()//
-                            );
+                                .format(
+                                        "invokeAsyncImpl tryAcquire semaphore timeout, %dms, waiting thread nums: %d semaphoreAsyncValue: %d", //
+                                        timeoutMillis,//
+                                        this.semaphoreAsync.getQueueLength(),//
+                                        this.semaphoreAsync.availablePermits()//
+                                );
                 plog.warn(info);
                 plog.warn(request.toString());
                 throw new RemotingTimeoutException(info);
@@ -458,7 +458,7 @@ public abstract class NettyRemotingAbstract {
 
 
     public void invokeOnewayImpl(final Channel channel, final RemotingCommand request,
-            final long timeoutMillis) throws InterruptedException, RemotingTooMuchRequestException,
+                                 final long timeoutMillis) throws InterruptedException, RemotingTooMuchRequestException,
             RemotingTimeoutException, RemotingSendRequestException {
         request.markOnewayRPC();
         boolean acquired = this.semaphoreOneway.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
@@ -490,12 +490,12 @@ public abstract class NettyRemotingAbstract {
             else {
                 String info =
                         String
-                            .format(
-                                "invokeOnewayImpl tryAcquire semaphore timeout, %dms, waiting thread nums: %d semaphoreAsyncValue: %d", //
-                                timeoutMillis,//
-                                this.semaphoreAsync.getQueueLength(),//
-                                this.semaphoreAsync.availablePermits()//
-                            );
+                                .format(
+                                        "invokeOnewayImpl tryAcquire semaphore timeout, %dms, waiting thread nums: %d semaphoreAsyncValue: %d", //
+                                        timeoutMillis,//
+                                        this.semaphoreAsync.getQueueLength(),//
+                                        this.semaphoreAsync.availablePermits()//
+                                );
                 plog.warn(info);
                 plog.warn(request.toString());
                 throw new RemotingTimeoutException(info);

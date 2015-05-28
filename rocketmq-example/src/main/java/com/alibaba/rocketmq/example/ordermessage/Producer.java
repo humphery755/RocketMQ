@@ -32,26 +32,31 @@ import com.alibaba.rocketmq.remoting.exception.RemotingException;
  * Producer，发送顺序消息
  */
 public class Producer {
+
     public static void main(String[] args) {
+        test();
+    }
+
+    public static void test() {
         try {
-            MQProducer producer = new DefaultMQProducer("please_rename_unique_group_name");
+            MQProducer producer = new DefaultMQProducer("ordermessage_group_name");
 
             producer.start();
 
             String[] tags = new String[] { "TagA", "TagB", "TagC", "TagD", "TagE" };
-
+            String numStr = String.valueOf(System.currentTimeMillis());
             for (int i = 0; i < 100; i++) {
                 // 订单ID相同的消息要有序
-                int orderId = i % 10;
+                String orderId =  numStr + i;
                 Message msg =
-                        new Message("TopicTestjjj", tags[i % tags.length], "KEY" + i,
-                            ("Hello RocketMQ " + i).getBytes());
+                        new Message("TopicTest", tags[i % tags.length], "KEY" + i,
+                            ("Hello RocketMQ " + numStr + i).getBytes());
 
                 SendResult sendResult = producer.send(msg, new MessageQueueSelector() {
                     @Override
                     public MessageQueue select(List<MessageQueue> mqs, Message msg, Object arg) {
-                        Integer id = (Integer) arg;
-                        int index = id % mqs.size();
+                        int hash = ((String) arg).hashCode();
+                        int index = hash % mqs.size();
                         return mqs.get(index);
                     }
                 }, orderId);

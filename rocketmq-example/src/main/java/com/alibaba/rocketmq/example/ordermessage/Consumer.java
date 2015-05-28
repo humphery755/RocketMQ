@@ -33,14 +33,16 @@ import com.alibaba.rocketmq.common.message.MessageExt;
 public class Consumer {
 
     public static void main(String[] args) throws MQClientException {
-        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("please_rename_unique_group_name_3");
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("consumer_ordermessage_group_name");
+        consumer.setConsumeThreadMax(1);
+        consumer.setConsumeThreadMin(1);
         /**
          * 设置Consumer第一次启动是从队列头部开始消费还是队列尾部开始消费<br>
          * 如果非第一次启动，那么按照上次消费的位置继续消费
          */
         consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
 
-        consumer.subscribe("TopicTest", "TagA || TagC || TagD");
+        consumer.subscribe("TopicTest", "TagA || TagB || TagC || TagD || TagE");
 
         consumer.registerMessageListener(new MessageListenerOrderly() {
             AtomicLong consumeTimes = new AtomicLong(0);
@@ -48,9 +50,10 @@ public class Consumer {
 
             @Override
             public ConsumeOrderlyStatus consumeMessage(List<MessageExt> msgs, ConsumeOrderlyContext context) {
-                context.setAutoCommit(false);
-                System.out.println(Thread.currentThread().getName() + " Receive New Messages: " + msgs);
-                this.consumeTimes.incrementAndGet();
+//                context.setAutoCommit(false);
+                for(MessageExt me : msgs)
+                System.out.println(Thread.currentThread().getName() + " Receive New Messages: " + me+" "+new String(me.getBody()));
+/*                this.consumeTimes.incrementAndGet();
                 if ((this.consumeTimes.get() % 2) == 0) {
                     return ConsumeOrderlyStatus.SUCCESS;
                 }
@@ -63,9 +66,9 @@ public class Consumer {
                 else if ((this.consumeTimes.get() % 5) == 0) {
                     context.setSuspendCurrentQueueTimeMillis(3000);
                     return ConsumeOrderlyStatus.SUSPEND_CURRENT_QUEUE_A_MOMENT;
-                }
+                }*/
 
-                return ConsumeOrderlyStatus.SUCCESS;
+                return ConsumeOrderlyStatus.ROLLBACK;
             }
         });
 

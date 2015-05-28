@@ -15,22 +15,9 @@
  */
 package com.alibaba.rocketmq.broker;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.PosixParser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
-
+import com.alibaba.rocketmq.broker.transaction.jdbc.JDBCTransactionStoreConfig;
 import com.alibaba.rocketmq.common.BrokerConfig;
 import com.alibaba.rocketmq.common.MQVersion;
 import com.alibaba.rocketmq.common.MixAll;
@@ -44,6 +31,18 @@ import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 import com.alibaba.rocketmq.srvutil.ServerUtil;
 import com.alibaba.rocketmq.store.config.BrokerRole;
 import com.alibaba.rocketmq.store.config.MessageStoreConfig;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.PosixParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
@@ -55,7 +54,6 @@ public class BrokerStartup {
     public static CommandLine commandLine = null;
     public static String configFile = null;
     public static Logger log;
-
 
     public static Options buildCommandlineOptions(final Options options) {
         Option opt = new Option("c", "configFile", true, "Broker config properties file");
@@ -112,6 +110,7 @@ public class BrokerStartup {
             final NettyClientConfig nettyClientConfig = new NettyClientConfig();
             nettyServerConfig.setListenPort(10911);
             final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
+            final JDBCTransactionStoreConfig jdbcTransactionStoreConfig = new JDBCTransactionStoreConfig();
 
             // 如果是slave，修改默认值
             if (BrokerRole.SLAVE == messageStoreConfig.getBrokerRole()) {
@@ -125,6 +124,7 @@ public class BrokerStartup {
                 MixAll.printObjectProperties(null, nettyServerConfig);
                 MixAll.printObjectProperties(null, nettyClientConfig);
                 MixAll.printObjectProperties(null, messageStoreConfig);
+                MixAll.printObjectProperties(null, jdbcTransactionStoreConfig);
                 System.exit(0);
             }
             else if (commandLine.hasOption('m')) {
@@ -132,6 +132,7 @@ public class BrokerStartup {
                 MixAll.printObjectProperties(null, nettyServerConfig, true);
                 MixAll.printObjectProperties(null, nettyClientConfig, true);
                 MixAll.printObjectProperties(null, messageStoreConfig, true);
+                MixAll.printObjectProperties(null, jdbcTransactionStoreConfig, true);
                 System.exit(0);
             }
 
@@ -147,6 +148,7 @@ public class BrokerStartup {
                     MixAll.properties2Object(properties, nettyServerConfig);
                     MixAll.properties2Object(properties, nettyClientConfig);
                     MixAll.properties2Object(properties, messageStoreConfig);
+                    MixAll.properties2Object(properties, jdbcTransactionStoreConfig);
 
                     BrokerPathConfigHelper.setBrokerConfigPath(file);
 
@@ -217,13 +219,15 @@ public class BrokerStartup {
             MixAll.printObjectProperties(log, nettyServerConfig);
             MixAll.printObjectProperties(log, nettyClientConfig);
             MixAll.printObjectProperties(log, messageStoreConfig);
+            MixAll.printObjectProperties(log, jdbcTransactionStoreConfig);
 
             // 初始化服务控制对象
             final BrokerController controller = new BrokerController(//
                 brokerConfig, //
                 nettyServerConfig, //
                 nettyClientConfig, //
-                messageStoreConfig);
+                messageStoreConfig,//
+                jdbcTransactionStoreConfig );
             boolean initResult = controller.initialize();
             if (!initResult) {
                 controller.shutdown();
