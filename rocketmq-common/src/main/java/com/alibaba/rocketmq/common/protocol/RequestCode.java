@@ -169,4 +169,7 @@ public class RequestCode {
 
     // 查看Broker上的各种统计信息
     public static final int VIEW_BROKER_STATS_DATA = 315;
+    
+    // Paxos算法应用
+    public static final int PAXOS_ALGORITHM_REQUEST_CODE = -300;
 }

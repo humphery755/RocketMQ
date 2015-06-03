@@ -63,10 +63,13 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.NamesrvLoggerName);
 
     private final NamesrvController namesrvController;
+    
+    private final PaxosRequestProcessor paxosRequestProcessor;
 
 
     public DefaultRequestProcessor(NamesrvController namesrvController) {
         this.namesrvController = namesrvController;
+        paxosRequestProcessor = new PaxosRequestProcessor(namesrvController);
     }
 
 
@@ -125,6 +128,8 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
             return this.getHasUnitSubTopicList(ctx, request);
         case RequestCode.GET_HAS_UNIT_SUB_UNUNIT_TOPIC_LIST:
             return this.getHasUnitSubUnUnitTopicList(ctx, request);
+        case RequestCode.PAXOS_ALGORITHM_REQUEST_CODE:
+        	return paxosRequestProcessor.processRequest(ctx, request);
         default:
             break;
         }
