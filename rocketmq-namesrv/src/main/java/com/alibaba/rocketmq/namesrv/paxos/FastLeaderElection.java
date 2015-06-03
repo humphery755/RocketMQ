@@ -1,6 +1,5 @@
 package com.alibaba.rocketmq.namesrv.paxos;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -13,16 +12,27 @@ import org.slf4j.LoggerFactory;
 
 import com.alibaba.rocketmq.common.ServiceThread;
 import com.alibaba.rocketmq.common.constant.LoggerName;
+import com.alibaba.rocketmq.common.protocol.RequestCode;
+import com.alibaba.rocketmq.common.protocol.ResponseCode;
 import com.alibaba.rocketmq.common.protocol.body.LeaderElectionBody;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.LeaderElectionRequestHeader;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.LeaderElectionRequestHeader.ServerState;
-import com.alibaba.rocketmq.namesrv.paxos.FastLeaderElection.WorkerReceiver;
+import com.alibaba.rocketmq.remoting.InvokeCallback;
+import com.alibaba.rocketmq.remoting.RemotingClient;
+import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
+import com.alibaba.rocketmq.remoting.exception.RemotingSendRequestException;
+import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
+import com.alibaba.rocketmq.remoting.exception.RemotingTooMuchRequestException;
+import com.alibaba.rocketmq.remoting.netty.NettyClientConfig;
+import com.alibaba.rocketmq.remoting.netty.NettyRemotingClient;
+import com.alibaba.rocketmq.remoting.netty.ResponseFuture;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 
 public class FastLeaderElection {
 	private static final Logger LOG = LoggerFactory
 			.getLogger(LoggerName.NamesrvLoggerName);
 
+	volatile boolean stop;
 	private final ArrayBlockingQueue<LeaderElectionRequestHeader> recvQueue = new ArrayBlockingQueue<LeaderElectionRequestHeader>(
 			100);
 	private LinkedBlockingQueue<RemotingCommand> sendqueue = new LinkedBlockingQueue<RemotingCommand>();
@@ -31,9 +41,16 @@ public class FastLeaderElection {
 	private ServerState state = ServerState.LOOKING;
 	volatile private LeaderElectionRequestHeader currentVote;
 	private long myid;
+	private RemotingClient remotingClient;
+	private String[] nsAddrs;
 
 	public FastLeaderElection() {
+		this.stop = false;
 		workerReceiver = new WorkerReceiver();
+		NettyClientConfig nettyClientConfig = new NettyClientConfig();
+		remotingClient = new NettyRemotingClient(nettyClientConfig);
+        //remotingClient.registerRPCHook(rpcHook);
+        remotingClient.start();
 	}
 
 	public boolean putRequest(final LeaderElectionRequestHeader request) {
@@ -44,18 +61,32 @@ public class FastLeaderElection {
 		return false;
 	}
 	
-	synchronized public void startLeaderElection() {
+	synchronized public void startLeaderElection() throws RemotingConnectException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException, InterruptedException {
 		currentVote = new LeaderElectionRequestHeader();
 		currentVote.setState(state);
 		currentVote.setSid(myid);
 		currentVote.setLogicalclock(logicalclock.get());
+		RemotingCommand request =
+                RemotingCommand.createRequestCommand(RequestCode.UNREGISTER_BROKER, currentVote);
+		if(currentVote.getBody()!=null){
+			request.setBody(currentVote.getBody().encode());
+		}
+		for(String addr:nsAddrs){
+			RemotingCommand response = remotingClient.invokeSync(addr, request, 3000);
+			assert response != null;
+	        switch (response.getCode()) {
+	        case ResponseCode.SUCCESS: {
+	            return;
+	        }
+	        default:
+	            break;
+	        }
+		}
 	}
 
 	class WorkerReceiver extends ServiceThread {
-		volatile boolean stop;
 
 		WorkerReceiver() {
-			this.stop = false;
 		}
 
 		public void putRequest() {
@@ -130,6 +161,7 @@ public class FastLeaderElection {
 		 * self.start_fle = System.currentTimeMillis(); }
 		 */
 		try {
+			
 			HashMap<Long, LeaderElectionRequestHeader> recvset = new HashMap<Long, LeaderElectionRequestHeader>();
 			HashMap<Long, LeaderElectionRequestHeader> outofelection = new HashMap<Long, LeaderElectionRequestHeader>();
 
