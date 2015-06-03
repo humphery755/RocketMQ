@@ -62,6 +62,7 @@ public class FastLeaderElection {
 	}
 	
 	synchronized public void startLeaderElection() throws RemotingConnectException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException, InterruptedException {
+		
 		currentVote = new LeaderElectionRequestHeader();
 		currentVote.setState(state);
 		currentVote.setSid(myid);
@@ -81,6 +82,9 @@ public class FastLeaderElection {
 	        default:
 	            break;
 	        }
+		}
+		synchronized (this) {
+			logicalclock.incrementAndGet();
 		}
 	}
 
@@ -146,12 +150,15 @@ public class FastLeaderElection {
 		}
 	}
 
+	HashMap<Long, LeaderElectionRequestHeader> recvset = new HashMap<Long, LeaderElectionRequestHeader>();
+	HashMap<Long, LeaderElectionRequestHeader> outofelection = new HashMap<Long, LeaderElectionRequestHeader>();
+
 	/**
 	 * Starts a new round of leader election. Whenever our QuorumPeer changes
 	 * its state to LOOKING, this method is invoked, and it sends notifications
 	 * to all other peers.
 	 */
-	public void lookForLeader() throws InterruptedException {
+	public void lookForLeader(LeaderElectionRequestHeader n) throws InterruptedException {
 		/*
 		 * try { self.jmxLeaderElectionBean = new LeaderElectionBean();
 		 * MBeanRegistry.getInstance().register( self.jmxLeaderElectionBean,
@@ -162,12 +169,7 @@ public class FastLeaderElection {
 		 */
 		try {
 			
-			HashMap<Long, LeaderElectionRequestHeader> recvset = new HashMap<Long, LeaderElectionRequestHeader>();
-			HashMap<Long, LeaderElectionRequestHeader> outofelection = new HashMap<Long, LeaderElectionRequestHeader>();
-
-			synchronized (this) {
-				logicalclock.incrementAndGet();
-			}
+			
 
 
 			/*
@@ -181,11 +183,6 @@ public class FastLeaderElection {
 				 * Otherwise processes new notification.
 				 */
 				if (n == null) {
-					if (manager.haveDelivered()) {
-						sendNotifications();
-					} else {
-						manager.connectAll();
-					}
 
 					/*
 					 * Exponential backoff
