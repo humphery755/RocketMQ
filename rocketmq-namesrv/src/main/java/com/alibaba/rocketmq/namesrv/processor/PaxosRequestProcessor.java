@@ -31,6 +31,7 @@ import com.alibaba.rocketmq.common.protocol.ResponseCode;
 import com.alibaba.rocketmq.common.protocol.body.LeaderElectionBody;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.namesrv.PaxosController;
+import com.alibaba.rocketmq.remoting.common.RemotingHelper;
 import com.alibaba.rocketmq.remoting.exception.RemotingCommandException;
 import com.alibaba.rocketmq.remoting.netty.NettyRequestProcessor;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
@@ -87,7 +88,7 @@ public class PaxosRequestProcessor implements NettyRequestProcessor {
 
 		switch (requestHeader.getCode()) {
 		case RequestCode.HEART_BEAT:
-			paxosController.registerNsSrv(requestHeader.getSid(), requestHeader.getAddr());
+			paxosController.registerNsSrv(requestHeader.getSid(), RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
 			response.setCode(ResponseCode.SUCCESS);
 			break;
 		default:
