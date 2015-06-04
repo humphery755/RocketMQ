@@ -19,7 +19,6 @@ import io.netty.channel.ChannelHandlerContext;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 
 import org.slf4j.Logger;
@@ -30,8 +29,8 @@ import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.protocol.RequestCode;
 import com.alibaba.rocketmq.common.protocol.ResponseCode;
 import com.alibaba.rocketmq.common.protocol.body.LeaderElectionBody;
-import com.alibaba.rocketmq.common.protocol.header.namesrv.LeaderElectionRequestHeader;
-import com.alibaba.rocketmq.namesrv.NamesrvController;
+import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
+import com.alibaba.rocketmq.namesrv.PaxosController;
 import com.alibaba.rocketmq.remoting.exception.RemotingCommandException;
 import com.alibaba.rocketmq.remoting.netty.NettyRequestProcessor;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
@@ -48,23 +47,37 @@ public class PaxosRequestProcessor implements NettyRequestProcessor {
 	 * Maximum capacity of thread queues
 	 */
 	static final int RECV_CAPACITY = 100;
-	public final ArrayBlockingQueue<LeaderElectionRequestHeader> recvQueue = new ArrayBlockingQueue<LeaderElectionRequestHeader>(
+	public final ArrayBlockingQueue<PaxosRequestHeader> recvQueue = new ArrayBlockingQueue<PaxosRequestHeader>(
 			RECV_CAPACITY);
 	// 定时线程
     private final ScheduledExecutorService scheduledExecutorService = Executors
         .newSingleThreadScheduledExecutor(new ThreadFactoryImpl("PaxosScheduledThread"));
 
-	private final NamesrvController namesrvController;
+	private final PaxosController paxosController;
 
-	public PaxosRequestProcessor(NamesrvController namesrvController) {
-		this.namesrvController=namesrvController;
+	public PaxosRequestProcessor(PaxosController paxosController) {
+		this.paxosController=paxosController;
 	}
+	
+	public void initialize(){
+		
+	}
+	
+	public void start() throws Exception {
+    }
+
+
+    public void shutdown() {
+        this.scheduledExecutorService.shutdown();
+    }
 
 	@Override
 	public RemotingCommand processRequest(ChannelHandlerContext ctx,
 			RemotingCommand request) throws RemotingCommandException {
-		final LeaderElectionRequestHeader requestHeader = (LeaderElectionRequestHeader) request
-				.decodeCommandCustomHeader(LeaderElectionRequestHeader.class);
+		final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+		
+		final PaxosRequestHeader requestHeader = (PaxosRequestHeader) request
+				.decodeCommandCustomHeader(PaxosRequestHeader.class);
 		LeaderElectionBody leaderElectionBody;
 		if (request.getBody() != null) {
 			leaderElectionBody = LeaderElectionBody.decode(request.getBody(),
@@ -72,22 +85,23 @@ public class PaxosRequestProcessor implements NettyRequestProcessor {
 			requestHeader.setBody(leaderElectionBody);
 		}
 
-/*		switch (requestHeader.getCode()) {
-		case RequestCode.PUT_KV_CONFIG:
-			;
-		case RequestCode.DELETE_KV_CONFIG:
-
-		default:
-			break;
-		}*/
-		
-		final RemotingCommand response = RemotingCommand.createResponseCommand(null);
-		if(namesrvController.getFastLeaderElection().putRequest(requestHeader)){
-			// response.setBody(body);
+		switch (requestHeader.getCode()) {
+		case RequestCode.HEART_BEAT:
+			paxosController.registerNsSrv(requestHeader.getSid(), requestHeader.getAddr());
 			response.setCode(ResponseCode.SUCCESS);
-		}else{
-			response.setCode(ResponseCode.SYSTEM_BUSY);
+			break;
+		case RequestCode.DELETE_KV_CONFIG:
+			
+		default:
+			if(paxosController.getFastLeaderElection().putRequest(requestHeader)){
+				// response.setBody(body);
+				response.setCode(ResponseCode.SUCCESS);
+			}else{
+				response.setCode(ResponseCode.SYSTEM_BUSY);
+			}
+			break;
 		}
+
 		response.setRemark(null);
 		return response;
 	}

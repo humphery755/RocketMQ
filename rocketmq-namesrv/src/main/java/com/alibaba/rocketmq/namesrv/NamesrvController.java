@@ -171,4 +171,9 @@ public class NamesrvController {
 	public FastLeaderElection getFastLeaderElection() {
 		return fastLeaderElection;
 	}
+
+
+	public ScheduledExecutorService getScheduledExecutorService() {
+		return scheduledExecutorService;
+	}
 }

@@ -21,7 +21,8 @@ public class NamesrvConfig {
     private String kvConfigPath = System.getProperty("user.home") + File.separator + "namesrv"
             + File.separator + "kvConfig.json";
 
-
+    private long myid;
+    private String namesrvAddr;
     public String getRocketmqHome() {
         return rocketmqHome;
     }
@@ -40,4 +41,26 @@ public class NamesrvConfig {
     public void setKvConfigPath(String kvConfigPath) {
         this.kvConfigPath = kvConfigPath;
     }
+
+
+	public long getMyid() {
+		return myid;
+	}
+
+
+	public void setMyid(long myid) {
+		this.myid = myid;
+	}
+
+
+	public String getNamesrvAddr() {
+		return namesrvAddr;
+	}
+
+
+	public void setNamesrvAddr(String namesrvAddr) {
+		this.namesrvAddr = namesrvAddr;
+	}
+
+    
 }
