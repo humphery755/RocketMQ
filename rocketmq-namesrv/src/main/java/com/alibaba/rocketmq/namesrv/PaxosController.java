@@ -136,11 +136,13 @@ public class PaxosController {
 
 	public void start() throws Exception {
 		remotingClient.start();
+		fastLeaderElection.start();
 		paxosRequestProcessor.start();
 	}
 
 	public void shutdown() {
 		paxosRequestProcessor.shutdown();
+		fastLeaderElection.shutdown();
 	}
 	
 	public void registerNsSrv(Long id,String addr){

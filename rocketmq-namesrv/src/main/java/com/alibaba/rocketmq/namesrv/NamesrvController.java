@@ -56,7 +56,6 @@ public class NamesrvController {
     private ExecutorService remotingExecutor;
     
     private PaxosController paxosController;
-    private FastLeaderElection fastLeaderElection;
 
     // 定时线程
     private final ScheduledExecutorService scheduledExecutorService = Executors
@@ -171,11 +170,6 @@ public class NamesrvController {
     public void setRemotingServer(RemotingServer remotingServer) {
         this.remotingServer = remotingServer;
     }
-
-
-	public FastLeaderElection getFastLeaderElection() {
-		return fastLeaderElection;
-	}
 
 
 	public ScheduledExecutorService getScheduledExecutorService() {

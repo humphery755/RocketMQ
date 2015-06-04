@@ -29,8 +29,8 @@ public class FastLeaderElection {
 
 	private final PaxosController paxosController;
 	//private final ArrayBlockingQueue<PaxosRequestHeader> recvQueue = new ArrayBlockingQueue<PaxosRequestHeader>(100);
-	private LinkedBlockingQueue<RemotingCommand> sendqueue = new LinkedBlockingQueue<RemotingCommand>();
 	private final WorkerReceiver workerReceiver;
+	private final WorkerSender workerSender;
 	private AtomicLong logicalclock = new AtomicLong(0); /* Election instance */
 	private ServerState state = ServerState.LOOKING;
 	volatile private Vote currentVote;
@@ -54,7 +54,17 @@ public class FastLeaderElection {
 	public FastLeaderElection(PaxosController paxosController) {
 		this.paxosController = paxosController;
 		workerReceiver = new WorkerReceiver();
+		workerSender = new WorkerSender();
+	}
+	
+	public void start() throws Exception {
+		workerReceiver.start();
+		workerSender.start();
+	}
 
+	public void shutdown() {
+		workerReceiver.shutdown();
+		workerSender.shutdown();
 	}
 
 	public boolean putRequest(final PaxosRequestHeader request) {
@@ -346,7 +356,7 @@ public class FastLeaderElection {
 		if (req.getBody() != null) {
 			request.setBody(req.getBody().encode());
 		}
-		sendqueue.offer(request);
+		workerSender.putRequest(request);
 		/*
 		 * for (long sid : nsServers.keySet()) { QuorumVerifier qv =
 		 * self.getQuorumVerifier(); ToSend notmsg = new
@@ -367,27 +377,35 @@ public class FastLeaderElection {
 	 * manager's queue.
 	 */
 
-	class WorkerSender extends Thread {
-		volatile boolean stop;
+	class WorkerSender extends ServiceThread {
+		private LinkedBlockingQueue<RemotingCommand> sendqueue = new LinkedBlockingQueue<RemotingCommand>();
 
 		WorkerSender() {
-			super("WorkerSender");
-			this.stop = false;
+		}
+		
+		public void putRequest(final RemotingCommand request) {
+			sendqueue.offer(request);
+			synchronized (this) {
+				if (!this.hasNotified) {
+					this.hasNotified = true;
+					this.notify();
+				}
+			}
 		}
 
 		public void run() {
-			while (!stop) {
-				try {
-					RemotingCommand m = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
-					if (m == null)
-						continue;
+			LOG.info(this.getServiceName() + " service started");
 
-					process(m);
+			while ((!isStoped())) {
+				try {
+					if (!this.process())
+						this.waitForRunning(0);
 				} catch (Exception e) {
-					break;
+					LOG.error(this.getServiceName() + " service has exception. ", e);
 				}
 			}
-			LOG.info("WorkerSender is down");
+
+			LOG.info(this.getServiceName() + " service end");
 		}
 
 		/**
@@ -400,19 +418,28 @@ public class FastLeaderElection {
 		 * @throws RemotingSendRequestException
 		 * @throws RemotingConnectException
 		 */
-		void process(RemotingCommand request) throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException,
+		boolean process() throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException,
 				InterruptedException {
+			RemotingCommand m = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
+			if (m == null)
+				return false;
 			for (String addr : paxosController.getNsServers().values()) {
-				RemotingCommand response = paxosController.getRemotingClient().invokeSync(addr, request, 3000);
+				RemotingCommand response = paxosController.getRemotingClient().invokeSync(addr, m, 3000);
 				assert response != null;
 				switch (response.getCode()) {
 				case ResponseCode.SUCCESS: {
-					return;
+					continue;
 				}
 				default:
 					break;
 				}
 			}
+			return true;
+		}
+
+		@Override
+		public String getServiceName() {
+			return WorkerSender.class.getSimpleName();
 		}
 	}
 
