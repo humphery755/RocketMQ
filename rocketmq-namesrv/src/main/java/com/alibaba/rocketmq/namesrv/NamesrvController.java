@@ -55,6 +55,7 @@ public class NamesrvController {
     // 服务端网络请求处理线程池
     private ExecutorService remotingExecutor;
     
+    private PaxosController paxosController;
     private FastLeaderElection fastLeaderElection;
 
     // 定时线程
@@ -74,6 +75,7 @@ public class NamesrvController {
         this.kvConfigManager = new KVConfigManager(this);
         this.routeInfoManager = new RouteInfoManager();
         this.brokerHousekeepingService = new BrokerHousekeepingService(this);
+        this.paxosController = new PaxosController(this);
     }
 
 
@@ -116,6 +118,7 @@ public class NamesrvController {
         // }
         // }, 1, 5, TimeUnit.MINUTES);
 
+        paxosController.initialize();
         return true;
     }
 
@@ -128,6 +131,7 @@ public class NamesrvController {
 
     public void start() throws Exception {
         this.remotingServer.start();
+        paxosController.start();
     }
 
 
@@ -135,6 +139,7 @@ public class NamesrvController {
         this.remotingServer.shutdown();
         this.remotingExecutor.shutdown();
         this.scheduledExecutorService.shutdown();
+        paxosController.shutdown();
     }
 
 
