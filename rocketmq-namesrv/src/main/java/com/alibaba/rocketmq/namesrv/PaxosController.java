@@ -60,7 +60,6 @@ public class PaxosController {
 	private FastLeaderElection fastLeaderElection;
 	private String[] allNsAddrs;
 	private long myid;
-	private String address;
 	
 	private Map<Long, String> nsServers = new HashMap<Long, String>();
 	
@@ -96,20 +95,11 @@ public class PaxosController {
 	public PaxosController(NamesrvController namesrvController) {
 		this.namesrvController = namesrvController;
 		myid = namesrvController.getNamesrvConfig().getMyid();
-		String[] addrs = namesrvController.getNamesrvConfig().getNamesrvAddr().split(";");
-		List l = new ArrayList();
-		List<String> localIP = getLocalIp();
-		for(String addr:addrs){
-			if(!localIP.contains(addr)){
-				l.add(addr);
-			}else{
-				address = addr;
-			}
+		if(namesrvController.getNamesrvConfig().getNamesrvAddr()==null){
+			log.error("namesrvAddr can't null!");
+			System.exit(1);
 		}
-		if(l.size()>0){
-			allNsAddrs = (String[])l.toArray(new String[l.size()]);
-		}
-		
+		allNsAddrs = namesrvController.getNamesrvConfig().getNamesrvAddr().split(";");
 		paxosRequestProcessor = new PaxosRequestProcessor(this);
 		fastLeaderElection = new FastLeaderElection(this);
 		
@@ -162,7 +152,6 @@ public class PaxosController {
 			InterruptedException {
 		PaxosRequestHeader rHeader = new PaxosRequestHeader();
 		rHeader.setSid(myid);
-		rHeader.setAddr(address);
 		rHeader.setCode(RequestCode.HEART_BEAT);
 		RemotingCommand request = RemotingCommand.createRequestCommand(
 				RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, rHeader);
