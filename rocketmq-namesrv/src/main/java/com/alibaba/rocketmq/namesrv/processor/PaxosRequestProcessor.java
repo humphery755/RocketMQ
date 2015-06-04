@@ -90,8 +90,6 @@ public class PaxosRequestProcessor implements NettyRequestProcessor {
 			paxosController.registerNsSrv(requestHeader.getSid(), requestHeader.getAddr());
 			response.setCode(ResponseCode.SUCCESS);
 			break;
-		case RequestCode.DELETE_KV_CONFIG:
-			
 		default:
 			if(paxosController.getFastLeaderElection().putRequest(requestHeader)){
 				// response.setBody(body);
