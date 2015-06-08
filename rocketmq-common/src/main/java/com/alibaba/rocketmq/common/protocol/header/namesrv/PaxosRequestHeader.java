@@ -101,4 +101,10 @@ public class PaxosRequestHeader implements CommandCustomHeader {
 	public void setZxid(long zxid) {
 		this.zxid = zxid;
 	}
+
+	@Override
+	public String toString() {
+		return "PaxosRequestHeader [code=" + code + ", leader=" + leader + ", sid=" + sid + ", zxid=" + zxid + ", electionEpoch=" + electionEpoch
+				+ ", state=" + state + ", addr=" + addr + "]";
+	}
 }

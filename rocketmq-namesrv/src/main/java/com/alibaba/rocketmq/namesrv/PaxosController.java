@@ -66,32 +66,6 @@ public class PaxosController {
 	private final PaxosRequestProcessor paxosRequestProcessor;
 	private RemotingClient remotingClient;
 
-	private static final List<String> getLocalIp() {
-		List l = new ArrayList();
-		try {
-			for (Enumeration<NetworkInterface> e = NetworkInterface
-					.getNetworkInterfaces(); e.hasMoreElements();) {
-				NetworkInterface item = e.nextElement();
-
-				// 非虚拟非回路并开启状态
-				if ((!item.isVirtual()) && item.isUp() && (!item.isLoopback())) {
-					for (InterfaceAddress address : item
-							.getInterfaceAddresses()) {
-						if (address.getAddress() instanceof Inet4Address) {
-							Inet4Address inet4Address = (Inet4Address) address
-									.getAddress();
-							l.add(inet4Address.getHostAddress());
-						}
-					}
-				}
-			}
-		} catch (IOException ex) {
-
-		}
-
-		return l;
-	}
-
 	public PaxosController(NamesrvController namesrvController) {
 		this.namesrvController = namesrvController;
 		myid = namesrvController.getNamesrvConfig().getMyid();

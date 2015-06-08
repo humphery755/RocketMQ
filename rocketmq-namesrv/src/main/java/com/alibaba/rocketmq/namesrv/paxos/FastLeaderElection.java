@@ -33,7 +33,7 @@ public class FastLeaderElection {
 	private final WorkerSender workerSender;
 	private AtomicLong logicalclock = new AtomicLong(0); /* Election instance */
 	private ServerState state = ServerState.LOOKING;
-	volatile private Vote currentVote;
+	//volatile private Vote currentVote;
 	private long zxid = 0;
 	private long leader = 0;
 	private long electionEpoch;
@@ -60,6 +60,7 @@ public class FastLeaderElection {
 	public void start() throws Exception {
 		workerReceiver.start();
 		workerSender.start();
+		startLeaderElection();
 	}
 
 	public void shutdown() {
@@ -87,8 +88,9 @@ public class FastLeaderElection {
 			logicalclock.incrementAndGet();
 		}
 		electionEpoch = paxosController.getMyid() * paxosController.getNsServers().size() + 1;
-		currentVote = new Vote(paxosController.getMyid(), electionEpoch);
+		//currentVote = new Vote(paxosController.getMyid(), electionEpoch);
 		// workerReceiver.putRequest(currentVote);
+		sendNotifications();
 	}
 
 	class WorkerReceiver extends ServiceThread {
@@ -423,7 +425,7 @@ public class FastLeaderElection {
 			RemotingCommand m = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
 			if (m == null)
 				return false;
-			for (String addr : paxosController.getNsServers().values()) {
+			for (String addr : paxosController.getAllNsAddrs()) {
 				RemotingCommand response = paxosController.getRemotingClient().invokeSync(addr, m, 3000);
 				assert response != null;
 				switch (response.getCode()) {
