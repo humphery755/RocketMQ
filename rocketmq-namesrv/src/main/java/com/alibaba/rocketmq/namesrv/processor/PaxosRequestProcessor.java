@@ -88,7 +88,9 @@ public class PaxosRequestProcessor implements NettyRequestProcessor {
 
 		switch (requestHeader.getCode()) {
 		case RequestCode.HEART_BEAT:
-			paxosController.registerNsSrv(requestHeader.getSid(), RemotingHelper.parseChannelRemoteAddr(ctx.channel()));
+			String addr = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
+			addr = addr==null?addr:addr.split(":")[0];
+			paxosController.registerNsSrv(requestHeader.getSid(), addr);
 			response.setCode(ResponseCode.SUCCESS);
 			break;
 		default:

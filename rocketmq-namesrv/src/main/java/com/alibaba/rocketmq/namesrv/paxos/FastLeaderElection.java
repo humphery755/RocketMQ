@@ -303,7 +303,7 @@ public class FastLeaderElection {
 		 * First make the views consistent. Sometimes peers will have different
 		 * zxids for a server depending on timing.
 		 */
-		int maxCount = paxosController.getAllNsAddrs().length+1/2+1;
+		int maxCount = paxosController.getAllNsAddrs().length/2+1;
 		int count = 0;
 		for (Map.Entry<Long, Vote> entry : votes.entrySet()) {
 			if (vote.equals(entry.getValue())) {
