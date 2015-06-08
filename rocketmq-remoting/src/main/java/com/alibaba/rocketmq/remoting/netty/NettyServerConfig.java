@@ -23,6 +23,7 @@ package com.alibaba.rocketmq.remoting.netty;
  */
 public class NettyServerConfig {
     private int listenPort = 8888;
+    private int listenUDPPort = 9999;
     private int serverWorkerThreads = 8;
     private int serverCallbackExecutorThreads = 0;
     private int serverSelectorThreads = 3;
@@ -45,7 +46,17 @@ public class NettyServerConfig {
     }
 
 
-    public int getServerWorkerThreads() {
+    public int getListenUDPPort() {
+		return listenUDPPort;
+	}
+
+
+	public void setListenUDPPort(int listenUDPPort) {
+		this.listenUDPPort = listenUDPPort;
+	}
+
+
+	public int getServerWorkerThreads() {
         return serverWorkerThreads;
     }
 

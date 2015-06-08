@@ -15,14 +15,9 @@
  */
 package com.alibaba.rocketmq.namesrv;
 
-import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.InterfaceAddress;
-import java.net.NetworkInterface;
-import java.util.ArrayList;
-import java.util.Enumeration;
+import io.netty.channel.Channel;
+
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -36,6 +31,7 @@ import com.alibaba.rocketmq.common.protocol.ResponseCode;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.namesrv.paxos.FastLeaderElection;
 import com.alibaba.rocketmq.namesrv.processor.PaxosRequestProcessor;
+import com.alibaba.rocketmq.remoting.ChannelEventListener;
 import com.alibaba.rocketmq.remoting.RemotingClient;
 import com.alibaba.rocketmq.remoting.RemotingServer;
 import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
@@ -44,6 +40,7 @@ import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
 import com.alibaba.rocketmq.remoting.netty.NettyClientConfig;
 import com.alibaba.rocketmq.remoting.netty.NettyRemotingClient;
 import com.alibaba.rocketmq.remoting.netty.NettyServerConfig;
+import com.alibaba.rocketmq.remoting.netty.NettyUDPServer;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 
 /**
@@ -60,6 +57,8 @@ public class PaxosController {
 	private FastLeaderElection fastLeaderElection;
 	private String[] allNsAddrs;
 	private long myid;
+	// 服务端通信层对象
+    private RemotingServer remotingServer;
 	
 	private Map<Long, String> nsServers = new HashMap<Long, String>();
 	
@@ -84,6 +83,27 @@ public class PaxosController {
 
 	public boolean initialize() {
 
+		// 初始化通信层
+        this.remotingServer = new NettyUDPServer(namesrvController.getNettyServerConfig(), new ChannelEventListener(){
+
+			@Override
+			public void onChannelConnect(String remoteAddr, Channel channel) {
+			}
+
+			@Override
+			public void onChannelClose(String remoteAddr, Channel channel) {
+			}
+
+			@Override
+			public void onChannelException(String remoteAddr, Channel channel) {
+			}
+
+			@Override
+			public void onChannelIdle(String remoteAddr, Channel channel) {
+			}
+        	
+        });
+        
 		this.registerProcessor();
 
 		this.namesrvController.getScheduledExecutorService()
@@ -91,7 +111,7 @@ public class PaxosController {
 					@Override
 					public void run() {
 						try {
-							PaxosController.this.connectAll();
+							//PaxosController.this.connectAll();
 						} catch (Exception e) {
 							e.printStackTrace();
 						}
@@ -102,19 +122,21 @@ public class PaxosController {
 	}
 
 	private void registerProcessor() {
-		namesrvController.getRemotingServer().registerProcessor(
+		remotingServer.registerProcessor(
 				RequestCode.PAXOS_ALGORITHM_REQUEST_CODE,
 				paxosRequestProcessor,
 				namesrvController.getScheduledExecutorService());
 	}
 
 	public void start() throws Exception {
+		this.remotingServer.start();
 		remotingClient.start();
 		fastLeaderElection.start();
 		paxosRequestProcessor.start();
 	}
 
 	public void shutdown() {
+		this.remotingServer.shutdown();
 		paxosRequestProcessor.shutdown();
 		fastLeaderElection.shutdown();
 	}
