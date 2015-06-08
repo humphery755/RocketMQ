@@ -11,9 +11,7 @@ import com.alibaba.rocketmq.remoting.exception.RemotingCommandException;
  * @since 2013-7-1
  */
 public class PaxosRequestHeader implements CommandCustomHeader {
-	public enum ServerState {
-        LOOKING, FOLLOWING, LEADING, OBSERVING;
-    }
+    public final static int LOOKING=0, FOLLOWING=1, LEADING=2, OBSERVING=3;
 	
 	@CFNotNull
 	private int code;
@@ -28,7 +26,7 @@ public class PaxosRequestHeader implements CommandCustomHeader {
     private long electionEpoch;
     
     @CFNotNull
-    private ServerState state;
+    private int state;
 
 	private LeaderElectionBody body;
 
@@ -52,11 +50,11 @@ public class PaxosRequestHeader implements CommandCustomHeader {
 		this.code = code;
 	}
 
-	public ServerState getState() {
+	public int getState() {
 		return state;
 	}
 
-	public void setState(ServerState state) {
+	public void setState(int state) {
 		this.state = state;
 	}
 

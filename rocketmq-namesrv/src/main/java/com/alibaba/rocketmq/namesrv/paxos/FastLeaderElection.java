@@ -15,7 +15,6 @@ import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.protocol.RequestCode;
 import com.alibaba.rocketmq.common.protocol.ResponseCode;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
-import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader.ServerState;
 import com.alibaba.rocketmq.namesrv.PaxosController;
 import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
 import com.alibaba.rocketmq.remoting.exception.RemotingSendRequestException;
@@ -32,7 +31,7 @@ public class FastLeaderElection {
 	private final WorkerReceiver workerReceiver;
 	private final WorkerSender workerSender;
 	private AtomicLong logicalclock = new AtomicLong(0); /* Election instance */
-	private ServerState state = ServerState.LOOKING;
+	private int state = PaxosRequestHeader.LOOKING;
 	//volatile private Vote currentVote;
 	private long zxid = 0;
 	private long leader = 0;
@@ -134,7 +133,7 @@ public class FastLeaderElection {
 				return false;
 
 			switch (n.state) {
-			case LOOKING:
+			case PaxosRequestHeader.LOOKING:
 				// If notification > current, replace and send messages
 				// out
 				if (n.electionEpoch > logicalclock.get()) {
@@ -175,7 +174,7 @@ public class FastLeaderElection {
 					 * relevant message from the reception queue
 					 */
 					if (n == null) {
-						state = (leader == paxosController.getMyid()) ? ServerState.LEADING : learningState();
+						state = (leader == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState();
 
 						Vote endVote = new Vote(leader, zxid, electionEpoch);
 						recvQueue.clear();
@@ -183,11 +182,11 @@ public class FastLeaderElection {
 					}
 				}
 				break;
-			case OBSERVING:
+			case PaxosRequestHeader.OBSERVING:
 				LOG.debug("Notification from observer: " + n.sid);
 				break;
-			case FOLLOWING:
-			case LEADING:
+			case PaxosRequestHeader.FOLLOWING:
+			case PaxosRequestHeader.LEADING:
 				/*
 				 * Consider all notifications from the same epoch together.
 				 */
@@ -195,7 +194,7 @@ public class FastLeaderElection {
 					Vote vote = new Vote(n.leader, n.zxid, n.electionEpoch, n.electionEpoch, n.state);
 					recvset.put(n.sid, vote);
 					if (termPredicate(recvset, vote) && checkLeader(outofelection, n.leader, n.electionEpoch)) {
-						state = (n.leader == paxosController.getMyid()) ? ServerState.LEADING : learningState();
+						state = (n.leader == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState();
 
 						Vote endVote = new Vote(n.leader, n.zxid, n.peerEpoch);
 						recvQueue.clear();
@@ -221,7 +220,7 @@ public class FastLeaderElection {
 						&& checkLeader(outofelection, n.leader, IGNOREVALUE)) {
 					synchronized (this) {
 						logicalclock.set(n.electionEpoch);
-						state = ((n.leader == paxosController.getMyid()) ? ServerState.LEADING : learningState());
+						state = ((n.leader == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState());
 					}
 					// Vote endVote = new Vote(n.leader,
 					// n.zxid,n.electionEpoch);
@@ -243,13 +242,13 @@ public class FastLeaderElection {
 		}
 	}
 
-	private ServerState learningState() {
+	private int learningState() {
 		if (getLearnerType() == LearnerType.PARTICIPANT) {
 			LOG.debug("I'm a participant: " + paxosController.getMyid());
-			return ServerState.FOLLOWING;
+			return PaxosRequestHeader.FOLLOWING;
 		} else {
 			LOG.debug("I'm an observer: " + paxosController.getMyid());
-			return ServerState.OBSERVING;
+			return PaxosRequestHeader.OBSERVING;
 		}
 	}
 
@@ -280,7 +279,7 @@ public class FastLeaderElection {
 		if (leader != paxosController.getMyid()) {
 			if (votes.get(leader) == null)
 				predicate = false;
-			else if (votes.get(leader).getState() != ServerState.LEADING)
+			else if (votes.get(leader).getState() != PaxosRequestHeader.LEADING)
 				predicate = false;
 		} else if (logicalclock.get() != electionEpoch) {
 			predicate = false;
@@ -471,7 +470,7 @@ public class FastLeaderElection {
 		/*
 		 * current state of sender
 		 */
-		ServerState state;
+		int state;
 
 		/*
 		 * Address of sender
