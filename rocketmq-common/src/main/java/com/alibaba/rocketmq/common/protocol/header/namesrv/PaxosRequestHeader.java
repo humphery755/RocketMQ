@@ -29,16 +29,6 @@ public class PaxosRequestHeader implements CommandCustomHeader {
     
     @CFNotNull
     private ServerState state;
-    
-    private String addr;
-
-	public String getAddr() {
-		return addr;
-	}
-
-	public void setAddr(String addr) {
-		this.addr = addr;
-	}
 
 	private LeaderElectionBody body;
 
@@ -105,6 +95,6 @@ public class PaxosRequestHeader implements CommandCustomHeader {
 	@Override
 	public String toString() {
 		return "PaxosRequestHeader [code=" + code + ", leader=" + leader + ", sid=" + sid + ", zxid=" + zxid + ", electionEpoch=" + electionEpoch
-				+ ", state=" + state + ", addr=" + addr + "]";
+				+ ", state=" + state + "]";
 	}
 }
