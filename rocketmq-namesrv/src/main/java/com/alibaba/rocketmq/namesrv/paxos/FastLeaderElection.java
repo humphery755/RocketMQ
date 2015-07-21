@@ -89,7 +89,7 @@ public class FastLeaderElection {
 		electionEpoch = paxosController.getMyid() * paxosController.getNsServers().size() + 1;
 		//currentVote = new Vote(paxosController.getMyid(), electionEpoch);
 		// workerReceiver.putRequest(currentVote);
-		sendNotifications();
+		//sendNotifications();
 	}
 
 	class WorkerReceiver extends ServiceThread {
@@ -418,22 +418,15 @@ public class FastLeaderElection {
 		 * @throws RemotingTimeoutException
 		 * @throws RemotingSendRequestException
 		 * @throws RemotingConnectException
+		 * @throws RemotingTooMuchRequestException 
 		 */
 		boolean process() throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException,
-				InterruptedException {
+				InterruptedException, RemotingTooMuchRequestException {
 			RemotingCommand m = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
 			if (m == null)
 				return false;
 			for (String addr : paxosController.getAllNsAddrs()) {
-				RemotingCommand response = paxosController.getRemotingClient().invokeSync(addr, m, 3000);
-				assert response != null;
-				switch (response.getCode()) {
-				case ResponseCode.SUCCESS: {
-					continue;
-				}
-				default:
-					break;
-				}
+				paxosController.getRemotingClient().invokeOneway(addr, m, 3000);
 			}
 			return true;
 		}

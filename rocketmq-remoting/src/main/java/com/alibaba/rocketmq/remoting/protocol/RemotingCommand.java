@@ -352,7 +352,6 @@ public class RemotingCommand {
 
         byte[] headerData = new byte[headerLength];
         byteBuffer.get(headerData);
-
         int bodyLength = length - 4 - headerLength;
         byte[] bodyData = null;
         if (bodyLength > 0) {

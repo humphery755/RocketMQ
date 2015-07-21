@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.namesrv.NamesrvConfig;
 import com.alibaba.rocketmq.common.protocol.RequestCode;
-import com.alibaba.rocketmq.common.protocol.ResponseCode;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.namesrv.paxos.FastLeaderElection;
 import com.alibaba.rocketmq.namesrv.processor.PaxosRequestProcessor;
@@ -37,9 +36,10 @@ import com.alibaba.rocketmq.remoting.RemotingServer;
 import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
 import com.alibaba.rocketmq.remoting.exception.RemotingSendRequestException;
 import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
+import com.alibaba.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import com.alibaba.rocketmq.remoting.netty.NettyClientConfig;
-import com.alibaba.rocketmq.remoting.netty.NettyRemotingClient;
 import com.alibaba.rocketmq.remoting.netty.NettyServerConfig;
+import com.alibaba.rocketmq.remoting.netty.NettyUDPClient;
 import com.alibaba.rocketmq.remoting.netty.NettyUDPServer;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 
@@ -77,7 +77,7 @@ public class PaxosController {
 		fastLeaderElection = new FastLeaderElection(this);
 		
 		NettyClientConfig nettyClientConfig = new NettyClientConfig();
-		remotingClient = new NettyRemotingClient(nettyClientConfig);
+		remotingClient = new NettyUDPClient(nettyClientConfig);
 		// remotingClient.registerRPCHook(rpcHook);
 	}
 
@@ -147,7 +147,7 @@ public class PaxosController {
 
 	private void connectAll() throws RemotingConnectException,
 			RemotingSendRequestException, RemotingTimeoutException,
-			InterruptedException {
+			InterruptedException, RemotingTooMuchRequestException {
 		PaxosRequestHeader rHeader = new PaxosRequestHeader();
 		rHeader.setSid(myid);
 		rHeader.setCode(RequestCode.HEART_BEAT);
@@ -155,16 +155,8 @@ public class PaxosController {
 				RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, rHeader);
 
 		for (String addr : allNsAddrs) {
-			RemotingCommand response = remotingClient.invokeSync(addr, request,
-					3000);
-			assert response != null;
-			switch (response.getCode()) {
-			case ResponseCode.SUCCESS: {
-				return;
-			}
-			default:
-				break;
-			}
+			remotingClient.invokeOneway(addr, request,3000);
+
 		}
 	}
 
