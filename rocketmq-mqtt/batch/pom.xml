@@ -10,10 +10,10 @@
 		<version>0.7-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>moquette-bundle</artifactId>
+	<artifactId>moquette-batch</artifactId>
 	<packaging>jar</packaging>
 	<!--<version>${moquette-version}</version> -->
-	<name>Moquette - OSGi bundle</name>
+	<name>Moquette - Batch</name>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
