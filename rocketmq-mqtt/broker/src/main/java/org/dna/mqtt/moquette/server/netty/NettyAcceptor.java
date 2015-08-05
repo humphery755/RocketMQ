@@ -17,6 +17,7 @@ package org.dna.mqtt.moquette.server.netty;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
@@ -138,6 +139,7 @@ public class NettyAcceptor implements ServerAcceptor {
                         pipeliner.init(pipeline);
                     }
                 })
+                .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 .option(ChannelOption.SO_BACKLOG, 1024*64)
                 .option(ChannelOption.SO_REUSEADDR, true);
                 if (isLinux) {
