@@ -1,0 +1,76 @@
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <properties>
+        <mina-version>2.0.7</mina-version>
+    </properties>
+    
+    <groupId>org.dna.mqtt</groupId>
+    <artifactId>moquette-parent</artifactId>
+
+    <packaging>pom</packaging>
+    <version>0.7-SNAPSHOT</version>
+    <name>Moquette MQTT parent</name>
+    <url>http://code.google.com/p/moquette-mqtt/</url>
+
+
+    <modules>
+        <module>broker</module>
+        <module>distribution</module>
+        <module>bundle</module>
+    </modules>
+    
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>cobertura-maven-plugin</artifactId>
+                <version>2.6</version>
+            </plugin>
+        </plugins>
+    </reporting>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.6</source>
+                    <target>1.6</target>
+                </configuration>
+            </plugin>
+	    <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+    </build>
+
+    <!--build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <artifactId>maven-assembly-plugin</artifactId>
+                    <version>2.4</version>
+                    <configuration>
+                        <archive>
+                            <manifest>
+                                <mainClass>org.dna.mqtt.moquette.server.Server</mainClass>
+                            </manifest>
+                        </archive>
+
+                        <descriptors>
+                            <descriptor>assembly/broker.xml</descriptor>
+                        </descriptors>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build-->
+
+</project>
