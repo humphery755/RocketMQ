@@ -31,13 +31,13 @@ import com.taobao.tair.impl.DefaultTairManager;
 
 public class MQUPConsumer {
 	private static final Logger LOG = LoggerFactory.getLogger(MQUPConsumer.class);
-	private Integer mygid;
+	private Integer brokergid;
 	private DefaultMQPushConsumer mqConsumer;
 	private DefaultMQProducer mqProducer;
 	private TairManager tairManager;
 
 	void init(Properties configProps) {
-		mygid = Integer.valueOf(configProps.getProperty("mygid"));
+		brokergid = Integer.valueOf(configProps.getProperty("brokergid"));
 		DefaultTairManager _tairManager = new DefaultTairManager();
 		List confServList = new ArrayList();
 		String[] servList = StringUtils.split(configProps.getProperty("tair.confServList"), ";");
@@ -46,11 +46,11 @@ public class MQUPConsumer {
 		_tairManager.setConfigServerList(confServList);
 		_tairManager.setGroupName(configProps.getProperty("tair.group"));
 
-		mqProducer = new DefaultMQProducer(String.format("MQTT_DOWN_PG%d",mygid));
-		mqConsumer = new DefaultMQPushConsumer(String.format("MQTT_UP_CG%d",mygid));
+		mqProducer = new DefaultMQProducer(String.format("MQTT_DOWN_PG%d",brokergid));
+		mqConsumer = new DefaultMQPushConsumer(String.format("MQTT_UP_CG%d",brokergid));
 		
-		final String CURRENT_TOPIC_UP = String.format(Constants.TOPIC_UPG_PATTERN,mygid);
-		final String CURRENT_TOPIC_DOWN = String.format(Constants.TOPIC_DOWNG_PATTERN,mygid);
+		final String CURRENT_TOPIC_UP = String.format(Constants.TOPIC_UPG_PATTERN,brokergid);
+		final String CURRENT_TOPIC_DOWN = String.format(Constants.TOPIC_DOWNG_PATTERN,brokergid);
 		try {
 			_tairManager.init();
 			tairManager = _tairManager;
@@ -76,7 +76,9 @@ public class MQUPConsumer {
 								if (hashCode < 0)
 									hashCode = -hashCode;
 
-								Message msg = new Message(CURRENT_TOPIC_DOWN, m.getTopicName(), publishKey, ObjectUtils.serialize(mqMessage));
+								byte[] body=ObjectUtils.serialize(mqMessage);
+								if(body==null)continue;
+								Message msg = new Message(CURRENT_TOPIC_DOWN, m.getTopicName(), publishKey,body );
 								if (m.getQos() == MessageType.QOS_MOST_ONE){
 									mqProducer.sendOneway(msg);
 								}else{

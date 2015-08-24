@@ -34,6 +34,7 @@ public class Activator{
     private static final Logger LOG = LoggerFactory.getLogger(Activator.class);
     
     MQUPConsumer mqupConsumer;
+    MQTTUPConsumer mqttUPConsumer;
     public void start() throws Exception {
     	/*Server s=new Server();
     	s.startServer();*/
@@ -46,12 +47,16 @@ public class Activator{
         }
         Properties configProps = confParser.getProperties();
         
-        mqupConsumer = new MQUPConsumer();
-        mqupConsumer.init(configProps);
+        /*mqupConsumer = new MQUPConsumer();
+        mqupConsumer.init(configProps);*/
+        mqttUPConsumer=new MQTTUPConsumer(configProps);
+        mqttUPConsumer.init();
+        mqttUPConsumer.start();
         LOG.trace("Moquette MQTT Processor started, version 0.7-SNAPSHOT");
     }
 
     public void stop() throws Exception {
+    	mqttUPConsumer.destroy();
         LOG.info("Moquette MQTT Processor stopped, version 0.7-SNAPSHOT");
     }
     public static void main(String[] args) throws Exception{
