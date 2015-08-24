@@ -35,7 +35,7 @@ public class Utils {
     public static final byte VERSION_3_1 = 3;
     public static final byte VERSION_3_1_1 = 4;
     
-    static byte readMessageType(ByteBuf in) {
+    public static byte readMessageType(ByteBuf in) {
         byte h1 = in.readByte();
         byte messageType = (byte) ((h1 & 0x00F0) >> 4);
         return messageType;
@@ -69,7 +69,7 @@ public class Utils {
      * 
      * @return the decoded length or -1 if needed more data to decode the length field.
      */
-    static int decodeRemainingLenght(ByteBuf in) {
+    public static int decodeRemainingLenght(ByteBuf in) {
         int multiplier = 1;
         int value = 0;
         byte digit;
@@ -91,7 +91,7 @@ public class Utils {
      * @throws IllegalArgumentException if the value is not in the specification bounds
      *  [0..268435455].
      */
-    static ByteBuf encodeRemainingLength(int value) throws CorruptedFrameException {
+    public static ByteBuf encodeRemainingLength(int value) throws CorruptedFrameException {
         if (value > MAX_LENGTH_LIMIT || value < 0) {
             throw new CorruptedFrameException("Value should in range 0.." + MAX_LENGTH_LIMIT + " found " + value);
         }
@@ -116,7 +116,7 @@ public class Utils {
      * 
      * @return the decoded string or null if NEED_DATA
      */
-    static String decodeString(ByteBuf in) throws UnsupportedEncodingException {
+    public static String decodeString(ByteBuf in) throws UnsupportedEncodingException {
         if (in.readableBytes() < 2) {
             return null;
         }
@@ -136,7 +136,7 @@ public class Utils {
      * Return the IoBuffer with string encoded as MSB, LSB and UTF-8 encoded
      * string content.
      */
-    static ByteBuf encodeString(String str) {
+    public static ByteBuf encodeString(String str) {
         ByteBuf out = Unpooled.buffer(2);
         byte[] raw;
         try {
@@ -156,7 +156,7 @@ public class Utils {
     /**
      * Return the number of bytes to encode the given remaining length value
      */
-    static int numBytesToEncode(int len) {
+    public static int numBytesToEncode(int len) {
         if (0 <= len && len <= 127) return 1;
         if (128 <= len && len <= 16383) return 2;
         if (16384 <= len && len <= 2097151) return 3;
@@ -164,7 +164,7 @@ public class Utils {
         throw new IllegalArgumentException("value shoul be in the range [0..268435455]");
     }
     
-    static byte encodeFlags(AbstractMessage message) {
+    public static byte encodeFlags(AbstractMessage message) {
         byte flags = 0;
         if (message.isDupFlag()) {
             flags |= 0x08;
