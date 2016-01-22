@@ -26,8 +26,8 @@ import com.alibaba.rocketmq.remoting.RPCHook;
  */
 public class TransactionMQProducer extends DefaultMQProducer {
     private TransactionCheckListener transactionCheckListener;
-    private int checkThreadPoolMinSize = 1;
-    private int checkThreadPoolMaxSize = 1;
+    private int checkThreadPoolMinSize = 2;
+    private int checkThreadPoolMaxSize = 200;
     private int checkRequestHoldMax = 2000;
 
 

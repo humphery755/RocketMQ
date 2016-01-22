@@ -140,6 +140,7 @@ public class NettyAcceptor implements ServerAcceptor {
                     }
                 })
                 .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+
                 .option(ChannelOption.SO_BACKLOG, 1024*64)
                 .option(ChannelOption.SO_REUSEADDR, true);
                 if (isLinux) {

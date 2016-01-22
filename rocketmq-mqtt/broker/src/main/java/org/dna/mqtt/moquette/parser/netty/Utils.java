@@ -36,6 +36,7 @@ public class Utils {
     public static final byte VERSION_3_1_1 = 4;
     
     public static byte readMessageType(ByteBuf in) {
+
         byte h1 = in.readByte();
         byte messageType = (byte) ((h1 & 0x00F0) >> 4);
         return messageType;
@@ -70,6 +71,7 @@ public class Utils {
      * @return the decoded length or -1 if needed more data to decode the length field.
      */
     public static int decodeRemainingLenght(ByteBuf in) {
+
         int multiplier = 1;
         int value = 0;
         byte digit;
@@ -91,6 +93,7 @@ public class Utils {
      * @throws IllegalArgumentException if the value is not in the specification bounds
      *  [0..268435455].
      */
+
     public static ByteBuf encodeRemainingLength(int value) throws CorruptedFrameException {
         if (value > MAX_LENGTH_LIMIT || value < 0) {
             throw new CorruptedFrameException("Value should in range 0.." + MAX_LENGTH_LIMIT + " found " + value);
@@ -164,6 +167,7 @@ public class Utils {
         throw new IllegalArgumentException("value shoul be in the range [0..268435455]");
     }
     
+
     public static byte encodeFlags(AbstractMessage message) {
         byte flags = 0;
         if (message.isDupFlag()) {

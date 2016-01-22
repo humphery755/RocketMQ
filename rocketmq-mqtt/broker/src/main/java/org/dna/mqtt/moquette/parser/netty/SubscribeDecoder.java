@@ -46,7 +46,7 @@ class SubscribeDecoder extends DemuxDecoder {
         if (message.getQos() != MessageType.QOS_LEAST_ONE) {
             throw new CorruptedFrameException("Received Subscribe message with QoS other than LEAST_ONE, was: " + message.getQos());
         }
-        
+
         int start = in.readerIndex();
         //read  messageIDs
         message.setMessageID(in.readUnsignedShort());

@@ -5,11 +5,17 @@ import static org.dna.mqtt.moquette.parser.netty.Utils.VERSION_3_1_1;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+<<<<<<< HEAD
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+=======
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+>>>>>>> 1512de459fe80b6135228639247a88b655bbbc16
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -73,8 +79,10 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 	private DefaultMQProducer mqProducer;
 	private DefaultMQPushConsumer mqConsumer;
 	private TairManager tairManager;
+
 	private Integer myid;//节点ID，全局唯一
 	private Integer brokergid;//broker集群标识
+
 	private String CURRENT_TOPIC_UPG;
 
 	private final static AtomicInteger at_pub_count = new AtomicInteger(0);
@@ -86,6 +94,7 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 
 		myid = Integer.valueOf(configProps.getProperty("myid"));
 		brokergid = Integer.valueOf(configProps.getProperty("brokergid"));
+
 		int ringBufferSize = Integer.valueOf(configProps.getProperty("ringBufferSize.protocol.processor"));
 		String strTairServList = configProps.getProperty("tair.confServList");
 		String strTairGName = configProps.getProperty("tair.group");
@@ -116,12 +125,14 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 		_tairManager.setConfigServerList(confServList);
 		_tairManager.setGroupName(strTairGName);
 
+
 		CURRENT_TOPIC_UPG = String.format(Constants.TOPIC_UPG_PATTERN, myid);
 		final String CURRENT_TOPIC_DOWN = String.format(Constants.TOPIC_DOWNG_PATTERN, brokergid);
 		final String CURRENT_TOPIC_SYS = String.format(Constants.TOPIC_SYS_PATTERN, brokergid);
 
 		mqProducer = new DefaultMQProducer(String.format("MQTT_UP_PG%d", myid));
 		mqConsumer = new DefaultMQPushConsumer(String.format("MQTT_DOWN_CG%d", myid));
+
 
 		try {
 			_tairManager.init();
@@ -136,7 +147,9 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 
 				@Override
 				public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
+
 					Set<String> cidSet = new HashSet();
+
 					for (MessageExt me : msgs) {
 						MQMessage mqMessage = ObjectUtils.deserialize(me.getBody(), MQMessage.class);
 						if (CURRENT_TOPIC_SYS.equals(me.getTopic())) {
@@ -154,6 +167,7 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 										m.getMessageID());
 								String tag = me.getTags();
 								if (StringUtils.startsWith(tag, Constants.TOPIC_GROUP_PREFIX)) {
+<<<<<<< HEAD
 									//Map<String/* clientId */, Subscription> subMap = subscriptionMap.get(tag);
 									cidSet.clear();
 									cidSet = findClientsByTopic(tag,cidSet);
@@ -165,6 +179,13 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 											sendPublish(cid, pm);
 											//pm.setPayload(ByteBuffer.wrap(m.getPayload()));
 											
+=======
+									Map<String/* clientId */, Subscription> subMap = subscriptionMap.get(tag);
+									if (subMap != null) {
+										PublishMessage pm = ext2PublishMessage(m);
+										for (Map.Entry<String, Subscription> entry : subMap.entrySet()) {
+											sendPublish(entry.getKey(), pm);
+>>>>>>> 1512de459fe80b6135228639247a88b655bbbc16
 										}
 									}
 								} else if (StringUtils.startsWith(tag, Constants.TOPIC_SYS_PREFIX)) {
@@ -185,11 +206,17 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 										m.getMessageID());
 								String tag = me.getTags();
 								if (StringUtils.startsWith(tag, Constants.TOPIC_GROUP_PREFIX)) {
+<<<<<<< HEAD
 									//Map<String/* clientId */, Subscription> subMap = subscriptionMap.get(tag);
 									cidSet.clear();
 									cidSet = findClientsByTopic(tag,cidSet);
 									if (!cidSet.isEmpty()) {
 										for (String cid : cidSet) {
+=======
+									Map<String/* clientId */, Subscription> subMap = subscriptionMap.get(tag);
+									if (subMap != null) {
+										for (Map.Entry<String, Subscription> entry : subMap.entrySet()) {
+>>>>>>> 1512de459fe80b6135228639247a88b655bbbc16
 											ConnectionDescriptor cd = m_clientIDs.get(me.getTags());
 											if (cd == null)
 												continue;
@@ -234,6 +261,7 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 		}, 10000, 10000, TimeUnit.MILLISECONDS);
 	}
 
+<<<<<<< HEAD
 	/**
 	 * 关于Topic通配符
 	/：用来表示层次，比如a/b，a/b/c。
@@ -303,6 +331,8 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 		return set;
 	}
 	
+=======
+>>>>>>> 1512de459fe80b6135228639247a88b655bbbc16
 	private PublishMessage ext2PublishMessage(PublishMessageExt m) {
 		PublishMessage pm = new PublishMessage();
 		pm.setDupFlag(m.isDupFlag());
@@ -350,6 +380,12 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 			pubMessage.setMessageID(pubMessage.getMessageID());
 		}
 
+<<<<<<< HEAD
+=======
+		if (m_clientIDs == null) {
+			throw new RuntimeException("Internal bad error, found m_clientIDs to null while it should be initialized, somewhere it's overwritten!!");
+		}
+>>>>>>> 1512de459fe80b6135228639247a88b655bbbc16
 		ConnectionDescriptor cd = m_clientIDs.get(clientId);
 		if (cd == null) {
 			return;// throw new
@@ -688,10 +724,13 @@ public class ProtocolProcessor2MQ implements EventHandler<ValueEvent> {
 		long maxOffset = -1;
 		String topic;
 		ConnectionDescriptor cd = m_clientIDs.get(clientID);
+<<<<<<< HEAD
 		if(cd==null){
 			processConnectionLost(clientID);
 			return;
 		}
+=======
+>>>>>>> 1512de459fe80b6135228639247a88b655bbbc16
 		for (SubscribeMessage.Couple req : msg.subscriptions()) {
 			byte qos = req.getQos();
 			ackMessage.addType(qos);

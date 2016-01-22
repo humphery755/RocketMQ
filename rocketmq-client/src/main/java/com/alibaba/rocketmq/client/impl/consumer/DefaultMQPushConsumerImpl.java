@@ -73,7 +73,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
     /**
      * Delay some time when exception occur
      */
-    private static final long PullTimeDelayMillsWhenException = 3000;
+    private static final long PullTimeDelayMillsWhenException = 6000;
     /**
      * Flow control interval
      */
@@ -1124,11 +1124,11 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             MQClientException, InterruptedException, MQBrokerException {
         Set<QueueTimeSpan> queueTimeSpan = new HashSet<QueueTimeSpan>();
         TopicRouteData routeData =
-                this.mQClientFactory.getMQClientAPIImpl().getTopicRouteInfoFromNameServer(topic, 3000);
+                this.mQClientFactory.getMQClientAPIImpl().getTopicRouteInfoFromNameServer(topic, 6000);
         for (BrokerData brokerData : routeData.getBrokerDatas()) {
             String addr = brokerData.selectBrokerAddr();
             queueTimeSpan.addAll(this.mQClientFactory.getMQClientAPIImpl().queryConsumeTimeSpan(addr, topic,
-                groupName(), 3000l));
+                groupName(), 6000l));
         }
 
         return queueTimeSpan;

@@ -15,9 +15,12 @@
  */
 package com.alibaba.rocketmq.example.benchmark;
 
+import java.io.FileInputStream;
 import java.util.LinkedList;
+import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -25,9 +28,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.alibaba.rocketmq.client.exception.MQClientException;
 import com.alibaba.rocketmq.client.producer.LocalTransactionExecuter;
 import com.alibaba.rocketmq.client.producer.LocalTransactionState;
-import com.alibaba.rocketmq.client.producer.SendResult;
 import com.alibaba.rocketmq.client.producer.TransactionCheckListener;
 import com.alibaba.rocketmq.client.producer.TransactionMQProducer;
+import com.alibaba.rocketmq.client.producer.TransactionSendResult;
 import com.alibaba.rocketmq.common.message.Message;
 import com.alibaba.rocketmq.common.message.MessageExt;
 
@@ -38,15 +41,22 @@ import com.alibaba.rocketmq.common.message.MessageExt;
 public class TransactionProducer {
     private static int threadCount;
     private static int messageSize;
+    private static int interval;
     private static boolean ischeck;
     private static boolean ischeckffalse;
-
+    private static Properties sysConfig=new Properties();
 
     public static void main(String[] args) throws MQClientException {
         threadCount = args.length >= 1 ? Integer.parseInt(args[0]) : 32;
         messageSize = args.length >= 2 ? Integer.parseInt(args[1]) : 1024 * 2;
         ischeck = args.length >= 3 ? Boolean.parseBoolean(args[2]) : false;
         ischeckffalse = args.length >= 4 ? Boolean.parseBoolean(args[3]) : false;
+        interval=args.length >= 5 ? Integer.parseInt(args[4]) : 0;
+        try {
+			sysConfig.load(new FileInputStream("./init.properties"));
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
 
         final Message msg = buildMessage(messageSize);
 
@@ -79,13 +89,14 @@ public class TransactionProducer {
                     final double averageRT = ((end[5] - begin[5]) / (double) (end[3] - begin[3]));
 
                     System.out.printf(
-                        "Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d transaction checkCount: %d \n"//
+                        "Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d transaction checkCount: %d RT Level: %s \n"//
                         , sendTps//
                         , statsBenchmark.getSendMessageMaxRT().get()//
                         , averageRT//
                         , end[2]//
                         , end[4]//
-                        , end[6]);
+                        , end[6]
+                        ,statsBenchmark.getSendMessageRTLevels().toString());
                 }
             }
 
@@ -106,7 +117,17 @@ public class TransactionProducer {
         final TransactionMQProducer producer = new TransactionMQProducer("benchmark_transaction_producer");
         producer.setInstanceName(Long.toString(System.currentTimeMillis()));
         producer.setTransactionCheckListener(transactionCheckListener);
-        producer.setDefaultTopicQueueNums(1000);
+		
+ 	// 事务回查最小并发数
+		producer.setCheckThreadPoolMinSize(Integer.valueOf(sysConfig.getProperty("mq.checkThreadPoolMinSize")));
+		// 事务回查最大并发数
+		producer.setCheckThreadPoolMaxSize(Integer.valueOf(sysConfig.getProperty("mq.checkThreadPoolMaxSize")));
+		// 队列数
+		producer.setCheckRequestHoldMax(Integer.valueOf(sysConfig.getProperty("mq.checkRequestHoldMax")));
+		
+		producer.setDefaultTopicQueueNums(Integer.valueOf(sysConfig.getProperty("mq.defaultTopicQueueNums")));
+		
+		producer.setSendMsgTimeout(Integer.valueOf(sysConfig.getProperty("mq.sendMsgTimeout")));
         producer.start();
 
         final TransactionExecuterBImpl tranExecuter = new TransactionExecuterBImpl(ischeck);
@@ -117,9 +138,14 @@ public class TransactionProducer {
                 public void run() {
                     while (true) {
                         try {
-                            // Thread.sleep(1000);
+                        	if(interval>0)
+								try {
+									Thread.sleep(interval);
+								} catch (InterruptedException e) {
+									e.printStackTrace();
+								}
                             final long beginTimestamp = System.currentTimeMillis();
-                            SendResult sendResult =
+                            TransactionSendResult sendResult =
                                     producer.sendMessageInTransaction(msg, tranExecuter, null);
                             if (sendResult != null) {
                                 statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
@@ -138,9 +164,11 @@ public class TransactionProducer {
 
                                 prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
                             }
+                            statsBenchmark.putResponseTime(currentRT);
                         }
                         catch (MQClientException e) {
                             statsBenchmark.getSendRequestFailedCount().incrementAndGet();
+                            e.printStackTrace();
                         }
                     }
                 }
@@ -177,6 +205,11 @@ class TransactionExecuterBImpl implements LocalTransactionExecuter {
 
     @Override
     public LocalTransactionState executeLocalTransactionBranch(final Message msg, final Object arg) {
+    	 try {
+			Thread.sleep(600);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
         if (ischeck) {
             return LocalTransactionState.UNKNOW;
         }
@@ -201,6 +234,11 @@ class TransactionCheckListenerBImpl implements TransactionCheckListener {
     public LocalTransactionState checkLocalTransactionState(MessageExt msg) {
         // System.out.println("server checking TrMsg " + msg.toString());
         statsBenchmarkTProducer.getCheckRequestSuccessCount().incrementAndGet();
+        try {
+			Thread.sleep(200);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
         if (ischeckffalse) {
 
             return LocalTransactionState.ROLLBACK_MESSAGE;
@@ -224,6 +262,7 @@ class StatsBenchmarkTProducer {
     private final AtomicLong sendMessageSuccessTimeTotal = new AtomicLong(0L);
     // 6
     private final AtomicLong sendMessageMaxRT = new AtomicLong(0L);
+    private final ConcurrentHashMap<Long,AtomicLong> sendMessageRTLevels=new ConcurrentHashMap();
     // 7
     private final AtomicLong checkRequestSuccessCount = new AtomicLong(0L);
 
@@ -274,5 +313,23 @@ class StatsBenchmarkTProducer {
 
     public AtomicLong getCheckRequestSuccessCount() {
         return checkRequestSuccessCount;
+    }
+    
+    public ConcurrentHashMap<Long, AtomicLong> getSendMessageRTLevels() {
+		return sendMessageRTLevels;
+	}
+
+
+	public void putResponseTime(long currentRT){
+    	Long lev=currentRT/1000;
+    	AtomicLong oldAtomic = sendMessageRTLevels.get(lev);
+    	if(oldAtomic==null){
+    		AtomicLong rt = new AtomicLong(1);
+    		oldAtomic =sendMessageRTLevels.putIfAbsent(lev, rt);
+    		if (oldAtomic==null){
+    			oldAtomic=rt;
+    		}
+    	}
+    	oldAtomic.incrementAndGet();
     }
 }

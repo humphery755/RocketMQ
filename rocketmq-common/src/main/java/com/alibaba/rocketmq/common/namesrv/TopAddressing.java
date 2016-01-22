@@ -49,7 +49,7 @@ public class TopAddressing {
 
 
     public final String fetchNSAddr() {
-        return fetchNSAddr(true, 3000);
+        return fetchNSAddr(true, 6000);
     }
 
 

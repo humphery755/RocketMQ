@@ -163,7 +163,6 @@ public class PullMessageProcessor implements NettyRequestProcessor {
 
         // 由于使用sendfile，所以必须要设置
         response.setOpaque(request.getOpaque());
-
         if (log.isDebugEnabled()) {
             log.debug("receive PullMessage request command, " + request);
         }

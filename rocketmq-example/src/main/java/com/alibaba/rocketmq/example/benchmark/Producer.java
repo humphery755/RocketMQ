@@ -15,7 +15,9 @@
  */
 package com.alibaba.rocketmq.example.benchmark;
 
+import java.io.FileInputStream;
 import java.util.LinkedList;
+import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
@@ -33,6 +35,7 @@ import com.alibaba.rocketmq.remoting.exception.RemotingException;
  * 性能测试，多线程同步发送消息
  */
 public class Producer {
+	private static Properties sysConfig=new Properties();
     public static void main(String[] args) throws MQClientException {
         final int threadCount = args.length >= 1 ? Integer.parseInt(args[0]) : 64;
         final int messageSize = args.length >= 2 ? Integer.parseInt(args[1]) : 128;
@@ -40,7 +43,11 @@ public class Producer {
 
         System.out
             .printf("threadCount %d messageSize %d keyEnable %s\n", threadCount, messageSize, keyEnable);
-
+        try {
+			sysConfig.load(new FileInputStream("./init.properties"));
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
         final Message msg = buildMessage(messageSize);
 
         final ExecutorService sendThreadPool = Executors.newFixedThreadPool(threadCount);
@@ -98,7 +105,11 @@ public class Producer {
         producer.setInstanceName(Long.toString(System.currentTimeMillis()));
 
         producer.setCompressMsgBodyOverHowmuch(Integer.MAX_VALUE);
-
+     		
+ 		producer.setDefaultTopicQueueNums(Integer.valueOf(sysConfig.getProperty("mq.defaultTopicQueueNums")));
+ 		
+ 		producer.setSendMsgTimeout(Integer.valueOf(sysConfig.getProperty("mq.sendMsgTimeout")));
+ 		
         producer.start();
 
         for (int i = 0; i < threadCount; i++) {

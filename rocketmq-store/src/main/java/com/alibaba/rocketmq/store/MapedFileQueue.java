@@ -465,11 +465,12 @@ public class MapedFileQueue {
                 if (index < 0 || index >= this.mapedFiles.size()) {
                     logError
                         .warn(
-                            "findMapedFileByOffset offset not matched, request Offset: {}, index: {}, mapedFileSize: {}, mapedFiles count: {}, StackTrace: {}",//
+                            "findMapedFileByOffset offset not matched, request Offset: {}, index: {}, mapedFileSize: {}, mapedFiles count: {}, fileFromOffset: {}, StackTrace: {}",//
                             offset,//
                             index,//
                             this.mapedFileSize,//
                             this.mapedFiles.size(),//
+                            mapedFile.getFileFromOffset(),
                             UtilAll.currentStackTrace());
                 }
 

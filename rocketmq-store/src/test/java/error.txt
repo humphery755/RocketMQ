@@ -1,0 +1,8 @@
+2016-01-18 22:00:00 WARN WriteSocketService - findMapedFileByOffset offset not matched, request Offset: 143612752096, index: 133, mapedFileSize: 1073741824, mapedFiles count: 2, StackTrace: 
+        java.lang.Thread.getStackTrace(Thread.java:1589)
+        com.alibaba.rocketmq.common.UtilAll.currentStackTrace(UtilAll.java:63)
+        com.alibaba.rocketmq.store.MapedFileQueue.findMapedFileByOffset(MapedFileQueue.java:466)
+        com.alibaba.rocketmq.store.CommitLog.getData(CommitLog.java:147)
+        com.alibaba.rocketmq.store.CommitLog.getData(CommitLog.java:141)
+        com.alibaba.rocketmq.store.DefaultMessageStore.getCommitLogData(DefaultMessageStore.java:825)
+        com.alibaba.rocketmq.store.ha.HAConnect

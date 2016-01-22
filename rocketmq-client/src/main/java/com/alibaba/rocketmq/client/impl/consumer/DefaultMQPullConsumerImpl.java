@@ -465,7 +465,7 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
             }
 
             this.mQClientFactory.getMQClientAPIImpl().consumerSendMessageBack(brokerAddr, msg, consumerGroup,
-                    delayLevel, 3000);
+                    delayLevel, 6000);
         } catch (Exception e) {
             log.error("sendMessageBack Exception, " + this.defaultMQPullConsumer.getConsumerGroup(), e);
 

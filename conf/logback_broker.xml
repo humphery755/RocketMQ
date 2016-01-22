@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+	<appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+		<filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+			<level>debug</level>
+		</filter>
+		<encoder charset="UTF-8">
+			<pattern>%p %d{yyyyMMddHHmmss} %c{2}.%M.%line[%t]: %X{tId}.%X{rId}.${APP_ID} %replace(%msg){'\\s',' '}%n</pattern>
+		</encoder>
+	</appender>
 	<appender name="DefaultAppender"
 		class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<file>${user.home}/logs/rocketmqlogs/broker_default.log</file>
@@ -171,47 +179,47 @@
 	</appender>
 
 	<logger name="RocketmqBroker" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqBrokerAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<logger name="RocketmqCommon" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqBrokerAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<logger name="RocketmqStore" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqStoreAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<logger name="RocketmqStoreError" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqStoreErrorAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<logger name="RocketmqTransaction" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqTransactionAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<logger name="RocketmqRebalanceLock" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqRebalanceLockAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<logger name="RocketmqRemoting" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqRemotingAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<logger name="RocketmqStats" additivity="false">
-		<level value="INFO" />
-		<appender-ref ref="RocketmqStatsAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</logger>
 
 	<root>
-		<level value="INFO" />
-		<appender-ref ref="DefaultAppender" />
+		<level value="DEBUG" />
+		<appender-ref ref="stdout" />
 	</root>
 </configuration>

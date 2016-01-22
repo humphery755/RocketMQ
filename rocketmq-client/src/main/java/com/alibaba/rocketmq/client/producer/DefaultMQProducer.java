@@ -42,7 +42,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      */
     private String createTopicKey = MixAll.DEFAULT_TOPIC;
     private volatile int defaultTopicQueueNums = 4;
-    private int sendMsgTimeout = 3000;
+    private int sendMsgTimeout = 6000;
     private int compressMsgBodyOverHowmuch = 1024 * 4;
     private int retryTimesWhenSendFailed = 2;
     private boolean retryAnotherBrokerWhenNotStoreOK = false;
