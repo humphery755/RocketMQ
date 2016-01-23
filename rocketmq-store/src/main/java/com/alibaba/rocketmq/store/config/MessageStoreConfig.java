@@ -110,7 +110,7 @@ public class MessageStoreConfig {
     // HA功能
     private int haListenPort = 10912;
     private int haSendHeartbeatInterval = 1000 * 5;
-    private int haHousekeepingInterval = 1000 * 20;
+    private int haHousekeepingInterval = 1000 * 30;
     private int haTransferBatchSize = 1024 * 32;
     // 如果不设置，则从NameServer获取Master HA服务地址
     @ImportantField

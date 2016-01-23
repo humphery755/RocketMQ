@@ -94,7 +94,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 		super(nettyServerConfig.getServerOnewaySemaphoreValue(), nettyServerConfig.getServerAsyncSemaphoreValue());
 		String name = SystemPropertyUtil.get("os.name").toLowerCase(Locale.UK).trim();
 		isLinux = name.startsWith("linux");
-
+		isLinux = false; //TODO: java.lang.UnsupportedOperationException: unsupported message type: OneMessageTransfer (expected: ByteBuf, DefaultFileRegion)
 		this.serverBootstrap = new ServerBootstrap();
 		this.nettyServerConfig = nettyServerConfig;
 		this.channelEventListener = channelEventListener;

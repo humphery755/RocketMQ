@@ -45,6 +45,7 @@ public class TransactionProducer {
     private static boolean ischeck;
     private static boolean ischeckffalse;
     private static Properties sysConfig=new Properties();
+    private static String topic;
 
     public static void main(String[] args) throws MQClientException {
         threadCount = args.length >= 1 ? Integer.parseInt(args[0]) : 32;
@@ -54,13 +55,12 @@ public class TransactionProducer {
         interval=args.length >= 5 ? Integer.parseInt(args[4]) : 0;
         try {
 			sysConfig.load(new FileInputStream("./init.properties"));
+			topic=sysConfig.getProperty("mq.topic", "BenchmarkTest");
 		} catch (Exception e1) {
 			e1.printStackTrace();
 		}
-
+        
         final Message msg = buildMessage(messageSize);
-
-        final ExecutorService sendThreadPool = Executors.newFixedThreadPool(threadCount);
 
         final StatsBenchmarkTProducer statsBenchmark = new StatsBenchmarkTProducer();
 
@@ -131,7 +131,8 @@ public class TransactionProducer {
         producer.start();
 
         final TransactionExecuterBImpl tranExecuter = new TransactionExecuterBImpl(ischeck);
-
+        if(threadCount>0){
+        final ExecutorService sendThreadPool = Executors.newFixedThreadPool(threadCount);
         for (int i = 0; i < threadCount; i++) {
             sendThreadPool.execute(new Runnable() {
                 @Override
@@ -174,12 +175,13 @@ public class TransactionProducer {
                 }
             });
         }
+        }
     }
 
 
     private static Message buildMessage(final int messageSize) {
         Message msg = new Message();
-        msg.setTopic("BenchmarkTest");
+        msg.setTopic(topic);
 
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < messageSize; i += 10) {

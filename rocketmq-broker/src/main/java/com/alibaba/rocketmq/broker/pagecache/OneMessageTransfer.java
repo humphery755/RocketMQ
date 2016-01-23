@@ -15,14 +15,14 @@
  */
 package com.alibaba.rocketmq.broker.pagecache;
 
-import io.netty.channel.FileRegion;
-import io.netty.util.AbstractReferenceCounted;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 
 import com.alibaba.rocketmq.store.SelectMapedBufferResult;
+
+import io.netty.channel.FileRegion;
+import io.netty.util.AbstractReferenceCounted;
 
 
 /**
@@ -33,8 +33,7 @@ public class OneMessageTransfer extends AbstractReferenceCounted implements File
     private final ByteBuffer byteBufferHeader;
     private final SelectMapedBufferResult selectMapedBufferResult;
     private long transfered; // the bytes which was transfered already
-
-
+    
     public OneMessageTransfer(ByteBuffer byteBufferHeader, SelectMapedBufferResult selectMapedBufferResult) {
         this.byteBufferHeader = byteBufferHeader;
         this.selectMapedBufferResult = selectMapedBufferResult;
@@ -83,4 +82,5 @@ public class OneMessageTransfer extends AbstractReferenceCounted implements File
     public long transfered() {
         return transfered;
     }
+    
 }

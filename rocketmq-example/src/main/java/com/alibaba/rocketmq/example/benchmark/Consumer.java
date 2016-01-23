@@ -15,8 +15,10 @@
  */
 package com.alibaba.rocketmq.example.benchmark;
 
+import java.io.FileInputStream;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicLong;
@@ -26,6 +28,7 @@ import com.alibaba.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import com.alibaba.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import com.alibaba.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import com.alibaba.rocketmq.client.exception.MQClientException;
+import com.alibaba.rocketmq.common.consumer.ConsumeFromWhere;
 import com.alibaba.rocketmq.common.message.MessageExt;
 
 
@@ -33,8 +36,16 @@ import com.alibaba.rocketmq.common.message.MessageExt;
  * 性能测试，订阅消息
  */
 public class Consumer {
-
+	private static Properties sysConfig=new Properties();
+    private static String topic;
+    
     public static void main(String[] args) throws MQClientException {
+    	 try {
+ 			sysConfig.load(new FileInputStream("./init.properties"));
+ 			topic=sysConfig.getProperty("mq.topic", "BenchmarkTest");
+ 		} catch (Exception e1) {
+ 			e1.printStackTrace();
+ 		}
         final StatsBenchmarkConsumer statsBenchmarkConsumer = new StatsBenchmarkConsumer();
 
         final Timer timer = new Timer("BenchmarkTimerThread", true);
@@ -86,11 +97,12 @@ public class Consumer {
         }, 10000, 10000);
 
         DefaultMQPushConsumer consumer =
-                new DefaultMQPushConsumer("benchmark_consumer_"
-                        + Long.toString(System.currentTimeMillis() % 100));
-        consumer.setInstanceName(Long.toString(System.currentTimeMillis()));
-
-        consumer.subscribe("BenchmarkTest", "*");
+                new DefaultMQPushConsumer("benchmark_consumer_1");
+        //consumer.setInstanceName(Long.toString(System.currentTimeMillis()));
+		consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
+		int consumeMessageBatchMaxSize = 32;
+		consumer.setConsumeMessageBatchMaxSize(consumeMessageBatchMaxSize);
+        consumer.subscribe(topic, "*");
 
         consumer.registerMessageListener(new MessageListenerConcurrently() {
             @Override

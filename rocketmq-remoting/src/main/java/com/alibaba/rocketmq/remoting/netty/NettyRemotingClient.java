@@ -220,6 +220,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 		super(nettyClientConfig.getClientOnewaySemaphoreValue(), nettyClientConfig.getClientAsyncSemaphoreValue());
 		String name = SystemPropertyUtil.get("os.name").toLowerCase(Locale.UK).trim();
 		isLinux = name.startsWith("linux");
+		isLinux = false;
 		this.nettyClientConfig = nettyClientConfig;
 		this.channelEventListener = channelEventListener;
 

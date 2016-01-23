@@ -303,9 +303,8 @@ public class PullMessageProcessor implements NettyRequestProcessor {
             }
             // 消费正常，按照订阅组配置重定向
             else {
-            	responseHeader.setSuggestWhichBrokerId(subscriptionGroupConfig
-                        .getWhichBrokerWhenConsumeSlowly());
-                //responseHeader.setSuggestWhichBrokerId(subscriptionGroupConfig.getBrokerId());
+            	//responseHeader.setSuggestWhichBrokerId(subscriptionGroupConfig.getWhichBrokerWhenConsumeSlowly());
+                responseHeader.setSuggestWhichBrokerId(subscriptionGroupConfig.getBrokerId());
             }
 
             switch (getMessageResult.getStatus()) {

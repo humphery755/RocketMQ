@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+	<property name="LOG_HOME" value="${user.home}/logs/rocketmqlogs/" />
 	<appender name="DefaultAppender"
 		class="ch.qos.logback.core.rolling.RollingFileAppender">
-		<file>${user.home}/logs/rocketmqlogs/namesrv_default.log</file>
+		<file>${LOG_HOME}/namesrv_default.log</file>
 		<append>true</append>
 		<rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-			<fileNamePattern>${user.home}/logs/rocketmqlogs/otherdays/namesrv_default.%i.log
+			<fileNamePattern>${LOG_HOME}/otherdays/namesrv_default.%i.log
 			</fileNamePattern>
 			<minIndex>1</minIndex>
 			<maxIndex>5</maxIndex>
@@ -22,10 +23,10 @@
 
 	<appender name="RocketmqNamesrvAppender"
 		class="ch.qos.logback.core.rolling.RollingFileAppender">
-		<file>${user.home}/logs/rocketmqlogs/namesrv.log</file>
+		<file>${LOG_HOME}/namesrv.log</file>
 		<append>true</append>
 		<rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-			<fileNamePattern>${user.home}/logs/rocketmqlogs/otherdays/namesrv.%i.log
+			<fileNamePattern>${LOG_HOME}/otherdays/namesrv.%i.log
 			</fileNamePattern>
 			<minIndex>1</minIndex>
 			<maxIndex>5</maxIndex>
