@@ -61,7 +61,7 @@ public class MapedFileQueue {
             AllocateMapedFileService allocateMapedFileService) {
         this.storePath = storePath;
         this.mapedFileSize = mapedFileSize;
-        this.allocateMapedFileService = allocateMapedFileService;
+        this.allocateMapedFileService = null;//allocateMapedFileService;
     }
 
 
@@ -465,12 +465,12 @@ public class MapedFileQueue {
                 if (index < 0 || index >= this.mapedFiles.size()) {
                     logError
                         .warn(
-                            "findMapedFileByOffset offset not matched, request Offset: {}, index: {}, mapedFileSize: {}, mapedFiles count: {}, fileFromOffset: {}, StackTrace: {}",//
+                            "findMapedFileByOffset offset not matched, request Offset: {}, index: {}, mapedFileSize: {}, mapedFiles count: {}, fileFromOffset: {}, filePath: {}, StackTrace: {}",//
                             offset,//
                             index,//
                             this.mapedFileSize,//
                             this.mapedFiles.size(),//
-                            mapedFile.getFileFromOffset(),
+                            mapedFile.getFileFromOffset(),storePath,
                             UtilAll.currentStackTrace());
                 }
 

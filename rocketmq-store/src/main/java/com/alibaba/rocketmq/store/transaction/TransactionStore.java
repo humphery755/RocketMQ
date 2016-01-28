@@ -1,30 +1,28 @@
 package com.alibaba.rocketmq.store.transaction;
 
-import java.util.List;
-
-
 /**
  * 事务存储接口，主要为分布式事务消息存储服务
  */
 public interface TransactionStore {
-    public boolean start(boolean lastExitOK);
+	public boolean start(boolean lastExitOK);
 
-    public boolean put(TransactionRecord trs);
+	public boolean put(TransactionRecord trs);
 
+	public boolean update(//
+			final long tsOffset, //
+			final long clOffset, //
+			final int groupHashCode, //
+			final int state//
+	);
 
-    public void remove(final Long pks);
+	void gotoCheck(int producerGroupHashCode, long tranStateTableOffset, long commitLogOffset, int msgSize);
+	// public List<TransactionRecord> traverse(final long pk, final int nums);
 
+	// public long totalRecords();
 
-    //public List<TransactionRecord> traverse(final long pk, final int nums);
+	// public long minPK();
 
+	// public long maxPK();
 
-    //public long totalRecords();
-
-
-    //public long minPK();
-
-
-    //public long maxPK();
-
-    public void shutdown();
+	public void shutdown();
 }

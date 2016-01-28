@@ -461,7 +461,7 @@ public class HAService {
                     else {
                         // TODO ERROR
                         log.info("HAClient, processReadEvent read socket < 0");
-                        return false;
+                        return true;
                     }
                 }
                 catch (IOException e) {

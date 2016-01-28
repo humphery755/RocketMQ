@@ -60,6 +60,28 @@ public class OffsetAction extends AbstractAction {
         }
         return TEMPLATE;
     }
+    
+    @RequestMapping(value = "/qryMaxPhyOffset.do", method = { RequestMethod.GET})
+    public String qryMaxPhyOffset(ModelMap map, HttpServletRequest request,
+            @RequestParam(required = false) String group, @RequestParam(required = false) String topic,
+            @RequestParam(required = false) String timestamp, @RequestParam(required = false) String force) {
+        Collection<Option> options = offsetService.getOptionsForResetOffsetByTime();
+        putPublicAttribute(map, "qryMaxPhyOffset", options, request);
+        try {
+            if (request.getMethod().equals(GET)) {
+            	checkOptions(options);
+                Table table = offsetService.resetOffsetByTime(group, topic, timestamp, force);
+                putTable(map, table);
+            }
+            else {
+                throwUnknowRequestMethodException(request);
+            }
+        }
+        catch (Throwable t) {
+            putAlertMsg(t, map);
+        }
+        return TEMPLATE;
+    }
 
 
     @Override

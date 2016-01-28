@@ -82,5 +82,26 @@ public class OneMessageTransfer extends AbstractReferenceCounted implements File
     public long transfered() {
         return transfered;
     }
+
+
+    @Override
+    public FileRegion retain() {
+        super.retain();
+        return this;
+    }
+
+    @Override
+    public FileRegion retain(int increment) {
+        super.retain(increment);
+        return this;
+    }
+
+    public FileRegion touch() {
+        return this;
+    }
+
+    public FileRegion touch(Object hint) {
+        return this;
+    }
     
 }

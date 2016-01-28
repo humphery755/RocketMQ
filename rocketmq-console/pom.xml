@@ -1,11 +1,14 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
+	<parent>
+		<groupId>com.alibaba.rocketmq</groupId>
+		<artifactId>rocketmq-all</artifactId>
+		<version>3.2.6</version>
+	</parent>
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>com.alibaba.rocketmq</groupId>
 	<artifactId>rocketmq-console</artifactId>
 	<packaging>war</packaging>
-	<version>SNAPSHOT-1.0</version>
 	<name>rocketmq-console</name>
 
 	<properties>
@@ -23,7 +26,6 @@
 		<commons-io.version>2.4</commons-io.version>
 		<commons-cli.version>1.2</commons-cli.version>
 		<commons-httpclient.version>3.1</commons-httpclient.version>
-		<netty-all.version>4.0.27.Final</netty-all.version>
 		<fastjson.version>1.1.37</fastjson.version>
 		<servlet-api.version>2.5</servlet-api.version>
 	</properties>
@@ -103,7 +105,6 @@
 		<dependency>
 			<groupId>io.netty</groupId>
 			<artifactId>netty-all</artifactId>
-			<version>${netty-all.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.alibaba</groupId>

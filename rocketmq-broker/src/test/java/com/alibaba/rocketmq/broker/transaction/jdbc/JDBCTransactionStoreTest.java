@@ -79,12 +79,7 @@ public class JDBCTransactionStoreTest {
         System.out.println(open);
         Assert.assertTrue(open);
 
-        List<Long> pks = new ArrayList<Long>();
-        store.remove(2L);
-        store.remove(4L);
-        store.remove(6L);
-        store.remove(8L);
-        store.remove(11L);
+
 
 
         store.shutdown();

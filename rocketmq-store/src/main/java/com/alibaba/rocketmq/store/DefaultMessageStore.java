@@ -1645,7 +1645,7 @@ public class DefaultMessageStore implements MessageStore {
         private void doDispatch() {//TODO: humphery
             if (!this.requestsRead.isEmpty()) {
                 Map<Long,DispatchRequest> prepareState = new HashMap();
-                List commitState = new ArrayList();
+                Map<Long,DispatchRequest> commitState = new HashMap();
                 for (DispatchRequest req : this.requestsRead) {
 
                     final int tranType = MessageSysFlag.getTransactionValue(req.getSysFlag());
@@ -1658,14 +1658,14 @@ public class DefaultMessageStore implements MessageStore {
                             req.getCommitLogOffset(), req.getMsgSize(), req.getTagsCode(),
                             req.getStoreTimestamp(), req.getConsumeQueueOffset());
                         Object obj = prepareState.remove(req.getPreparedTransactionOffset());
-                        if(obj==null)commitState.add(req.getPreparedTransactionOffset());
+                        if(obj==null)commitState.put(req.getPreparedTransactionOffset(),req);
                         break;
                     case MessageSysFlag.TransactionPreparedType:
                         prepareState.put(req.getCommitLogOffset(),req);
                         break;
                     case MessageSysFlag.TransactionRollbackType:
                         obj = prepareState.remove(req.getPreparedTransactionOffset());
-                        if(obj==null)commitState.add(req.getPreparedTransactionOffset());
+                        if(obj==null)commitState.put(req.getPreparedTransactionOffset(),req);
                         break;
                     }
 
@@ -1681,11 +1681,12 @@ public class DefaultMessageStore implements MessageStore {
                 if (DefaultMessageStore.this.getMessageStoreConfig().isMessageIndexEnable()) {
                     DefaultMessageStore.this.indexService.putRequest(this.requestsRead.toArray());
                 }
-
-                preparTransaction(prepareState);
-                prepareState.clear();
-                commitTransaction(commitState);
-                commitState.clear();
+               if( messageStoreConfig.getBrokerRole()!=SLAVE){
+	                preparTransaction(prepareState);
+	                prepareState.clear();
+	                commitTransaction(commitState);
+	                commitState.clear();
+               }
                 this.requestsRead.clear();
             }
         }
@@ -1703,11 +1704,12 @@ public class DefaultMessageStore implements MessageStore {
             }
 
         }
-        private void commitTransaction(List<Long> stateTable){
+        private void commitTransaction(Map<Long,DispatchRequest> stateTable){
             if(stateTable.size()==0)return;
 
-            for(Long pk:stateTable){
-                DefaultMessageStore.this.transactionStore.remove(pk);
+            for(Map.Entry<Long,DispatchRequest> entry:stateTable.entrySet()){
+            	int tranType = MessageSysFlag.getTransactionValue(entry.getValue().getSysFlag());
+                DefaultMessageStore.this.transactionStore.update(entry.getValue().getCommitLogOffset(),entry.getValue().getPreparedTransactionOffset(),entry.getValue().getProducerGroup().hashCode(),tranType);
             }
 
         }

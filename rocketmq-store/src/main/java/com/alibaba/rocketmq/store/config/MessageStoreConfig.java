@@ -37,6 +37,10 @@ public class MessageStoreConfig {
     private String storePathCommitLog = System.getProperty("user.home") + File.separator + "store"
             + File.separator + "commitlog";
 
+    private int tranRedoLogMapedFileSize=1024 * 1024 * 1024;
+    private int tranStateTableMapedFileSize=1024 * 1024 * 1024;
+    private int checkTransactionMessageAtleastInterval=1000 * 30;
+    private int checkTransactionMessageTimerInterval=1000 * 30;
     // CommitLog每个文件大小 1G
     private int mapedFileSizeCommitLog = 1024 * 1024 * 1024;
     // ConsumeQueue每个文件大小 默认存储30W条消息
@@ -592,4 +596,44 @@ public class MessageStoreConfig {
     public void setStorePathRootDir(String storePathRootDir) {
         this.storePathRootDir = storePathRootDir;
     }
+
+
+	public int getTranStateTableMapedFileSize() {
+		return tranStateTableMapedFileSize;
+	}
+
+
+	public void setTranStateTableMapedFileSize(int tranStateTableMapedFileSize) {
+		this.tranStateTableMapedFileSize = tranStateTableMapedFileSize;
+	}
+
+
+	public int getTranRedoLogMapedFileSize() {
+		return tranRedoLogMapedFileSize;
+	}
+
+
+	public void setTranRedoLogMapedFileSize(int tranRedoLogMapedFileSize) {
+		this.tranRedoLogMapedFileSize = tranRedoLogMapedFileSize;
+	}
+
+
+	public int getCheckTransactionMessageAtleastInterval() {
+		return checkTransactionMessageAtleastInterval;
+	}
+
+
+	public void setCheckTransactionMessageAtleastInterval(int checkTransactionMessageAtleastInterval) {
+		this.checkTransactionMessageAtleastInterval = checkTransactionMessageAtleastInterval;
+	}
+
+
+	public int getCheckTransactionMessageTimerInterval() {
+		return checkTransactionMessageTimerInterval;
+	}
+
+
+	public void setCheckTransactionMessageTimerInterval(int checkTransactionMessageTimerInterval) {
+		this.checkTransactionMessageTimerInterval = checkTransactionMessageTimerInterval;
+	}
 }
