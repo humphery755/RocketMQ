@@ -58,6 +58,7 @@ Servers/
 .settings/
 .metadata/
 .amateras
+.recommenders
 src/main/resources/hibernate.cfg.xml
 src/main/resources/hibernate.reveng.xml
 /target*
