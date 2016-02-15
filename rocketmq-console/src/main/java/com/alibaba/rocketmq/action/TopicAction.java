@@ -42,10 +42,10 @@ public class TopicAction extends AbstractAction {
 
 
     @RequestMapping(value = "/list.do", method = RequestMethod.GET)
-    public String list(ModelMap map) {
+    public String list(ModelMap map,@RequestParam(required = false)  String filter) {
         putPublicAttribute(map, "list");
         try {
-            Table table = topicService.list();
+            Table table = topicService.list(filter);
             putTable(map, table);
         }
         catch (Throwable t) {

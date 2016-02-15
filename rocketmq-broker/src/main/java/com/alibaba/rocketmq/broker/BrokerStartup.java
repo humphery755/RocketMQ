@@ -15,9 +15,19 @@
  */
 package com.alibaba.rocketmq.broker;
 
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.joran.JoranConfigurator;
-import com.alibaba.rocketmq.broker.transaction.jdbc.JDBCTransactionStoreConfig;
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.PosixParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.alibaba.rocketmq.common.BrokerConfig;
 import com.alibaba.rocketmq.common.MQVersion;
 import com.alibaba.rocketmq.common.MixAll;
@@ -31,18 +41,9 @@ import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 import com.alibaba.rocketmq.srvutil.ServerUtil;
 import com.alibaba.rocketmq.store.config.BrokerRole;
 import com.alibaba.rocketmq.store.config.MessageStoreConfig;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.PosixParser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
 
 
 /**
@@ -110,7 +111,6 @@ public class BrokerStartup {
             final NettyClientConfig nettyClientConfig = new NettyClientConfig();
             nettyServerConfig.setListenPort(10911);
             final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
-            final JDBCTransactionStoreConfig jdbcTransactionStoreConfig = new JDBCTransactionStoreConfig();
 
             // 如果是slave，修改默认值
             if (BrokerRole.SLAVE == messageStoreConfig.getBrokerRole()) {
@@ -124,7 +124,6 @@ public class BrokerStartup {
                 MixAll.printObjectProperties(null, nettyServerConfig);
                 MixAll.printObjectProperties(null, nettyClientConfig);
                 MixAll.printObjectProperties(null, messageStoreConfig);
-                MixAll.printObjectProperties(null, jdbcTransactionStoreConfig);
                 System.exit(0);
             }
             else if (commandLine.hasOption('m')) {
@@ -132,7 +131,6 @@ public class BrokerStartup {
                 MixAll.printObjectProperties(null, nettyServerConfig, true);
                 MixAll.printObjectProperties(null, nettyClientConfig, true);
                 MixAll.printObjectProperties(null, messageStoreConfig, true);
-                MixAll.printObjectProperties(null, jdbcTransactionStoreConfig, true);
                 System.exit(0);
             }
 
@@ -148,7 +146,6 @@ public class BrokerStartup {
                     MixAll.properties2Object(properties, nettyServerConfig);
                     MixAll.properties2Object(properties, nettyClientConfig);
                     MixAll.properties2Object(properties, messageStoreConfig);
-                    MixAll.properties2Object(properties, jdbcTransactionStoreConfig);
 
                     BrokerPathConfigHelper.setBrokerConfigPath(file);
 
@@ -207,27 +204,28 @@ public class BrokerStartup {
             messageStoreConfig.setHaListenPort(nettyServerConfig.getListenPort() + 1);
 
             // 初始化Logback
+            System.setProperty(
+                    "logback.configurationFile",
+                    brokerConfig.getRocketmqHome() + "/conf/logback_broker.xml"
+            );
             LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
             JoranConfigurator configurator = new JoranConfigurator();
             configurator.setContext(lc);
             lc.reset();
             configurator.doConfigure(brokerConfig.getRocketmqHome() + "/conf/logback_broker.xml");
             log = LoggerFactory.getLogger(LoggerName.BrokerLoggerName);
-
             // 打印启动参数
             MixAll.printObjectProperties(log, brokerConfig);
             MixAll.printObjectProperties(log, nettyServerConfig);
             MixAll.printObjectProperties(log, nettyClientConfig);
             MixAll.printObjectProperties(log, messageStoreConfig);
-            MixAll.printObjectProperties(log, jdbcTransactionStoreConfig);
 
             // 初始化服务控制对象
             final BrokerController controller = new BrokerController(//
                 brokerConfig, //
                 nettyServerConfig, //
                 nettyClientConfig, //
-                messageStoreConfig,//
-                jdbcTransactionStoreConfig );
+                messageStoreConfig );
             boolean initResult = controller.initialize();
             if (!initResult) {
                 controller.shutdown();

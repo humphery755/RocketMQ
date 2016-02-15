@@ -1,54 +1,56 @@
-package com.alibaba.rocketmq.broker.transaction.jdbc;
+package com.alibaba.rocketmq.store.transaction.jdbc;
 
-import com.alibaba.rocketmq.broker.BrokerController;
-import com.alibaba.rocketmq.broker.client.ClientChannelInfo;
-import com.alibaba.rocketmq.common.MixAll;
-import com.alibaba.rocketmq.common.constant.LoggerName;
-import com.alibaba.rocketmq.common.protocol.header.CheckTransactionStateRequestHeader;
-import com.alibaba.rocketmq.store.SelectMapedBufferResult;
-import com.alibaba.rocketmq.store.config.BrokerRole;
-import com.alibaba.rocketmq.store.transaction.TransactionRecord;
-import com.alibaba.rocketmq.store.transaction.TransactionStore;
+import java.net.URL;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
-import java.nio.ByteBuffer;
-import java.sql.*;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
+import com.alibaba.rocketmq.common.MixAll;
+import com.alibaba.rocketmq.common.UtilAll;
+import com.alibaba.rocketmq.common.constant.LoggerName;
+import com.alibaba.rocketmq.common.message.MessageConst;
+import com.alibaba.rocketmq.common.message.MessageExt;
+import com.alibaba.rocketmq.common.sysflag.MessageSysFlag;
+import com.alibaba.rocketmq.store.DefaultMessageStore;
+import com.alibaba.rocketmq.store.DispatchRequest;
+import com.alibaba.rocketmq.store.config.BrokerRole;
+import com.alibaba.rocketmq.store.transaction.TransactionRecord;
+import com.alibaba.rocketmq.store.transaction.TransactionStore;
+
+import net.openhft.chronicle.map.ChronicleMap;
+import net.openhft.chronicle.map.ChronicleMapBuilder;
 
 /**
  * @author humphery
  */
 public class JDBCTransactionStore implements TransactionStore {
 	private static final Logger log = LoggerFactory.getLogger(LoggerName.TransactionLoggerName);
-	private final JDBCTransactionStoreConfig jdbcTransactionStoreConfig;
 	private Connection connection;
 	private AtomicLong totalRecordsValue = new AtomicLong(0);
-	private BrokerController brokerController;
+	private final DefaultMessageStore messageStore;
 	// 定时回查线程
 	private final Timer timer = new Timer("CheckTransactionMessageTimer", true);
 	// TODO:未提交事务消息过多时存在内存被撑爆，待优化
-	private Map<Long, TransactionRecord> tranStateTable = new ConcurrentHashMap();
+	private final ChronicleMap<Long, TransactionRecord> tranStateTable;
+	// State Table Offset，重启时，必须纠正
+	private final AtomicLong tranStateTableOffset = new AtomicLong(0);
 
-	public JDBCTransactionStore(JDBCTransactionStoreConfig jdbcTransactionStoreConfig,
-			BrokerController brokerController) {
-		this.jdbcTransactionStoreConfig = jdbcTransactionStoreConfig;
-		this.brokerController = brokerController;
-	}
-
-	private boolean loadDriver() {
-		try {
-			Class.forName(this.jdbcTransactionStoreConfig.getJdbcDriverClass()).newInstance();
-			log.info("Loaded the appropriate driver, {}", this.jdbcTransactionStoreConfig.getJdbcDriverClass());
-			return true;
-		} catch (Exception e) {
-			log.info("Loaded the appropriate driver Exception", e);
-		}
-
-		return false;
+	public JDBCTransactionStore(DefaultMessageStore messageStore) {
+		this.messageStore = messageStore;
+		ChronicleMapBuilder<Long, TransactionRecord> tranStateMapBuilder = ChronicleMapBuilder
+				.of(Long.class, TransactionRecord.class).entries(500_000);
+		tranStateTable = tranStateMapBuilder.create();
 	}
 
 	private boolean computeTotalRecords() {
@@ -116,64 +118,11 @@ public class JDBCTransactionStore implements TransactionStore {
 	}
 
 	@Override
-	public boolean start(boolean lastExitOK) {
-		if (this.loadDriver()) {
-			Properties props = new Properties();
-			props.put("user", jdbcTransactionStoreConfig.getJdbcUser());
-			props.put("password", jdbcTransactionStoreConfig.getJdbcPassword());
-
-			try {
-				this.connection = DriverManager.getConnection(this.jdbcTransactionStoreConfig.getJdbcURL(), props);
-
-				this.connection.setAutoCommit(false);
-
-				// 如果表不存在，尝试初始化表
-				if (!this.computeTotalRecords()) {
-					return this.createDB();
-				}
-
-			} catch (SQLException e) {
-				log.error("Create JDBC Connection Exeption", e);
-				return false;
-			}
-		}
-		// 正常数据恢复
-		if (lastExitOK) {
-			Statement statement = null;
-			ResultSet resultSet = null;
-			try {
-				statement = JDBCTransactionStore.this.connection.createStatement();
-				resultSet = statement.executeQuery("select offset,pgrouphashcode,msgsize,timestamp from t_transaction");
-				while (resultSet.next()) {
-					TransactionRecord tr = new TransactionRecord();
-					tr.setOffset(resultSet.getLong(1));
-					tr.setPgroupHashCode(resultSet.getInt(2));
-					tr.setMsgSize(resultSet.getInt(3));
-					tr.setTimestamp(resultSet.getInt(4));
-					tranStateTable.put(tr.getOffset(), tr);
-				}
-			} catch (Exception e) {
-				log.warn("computeTotalRecords Exception", e);
-				return false;
-			} finally {
-				if (null != statement) {
-					try {
-						statement.close();
-					} catch (SQLException e) {
-					}
-				}
-
-				if (null != resultSet) {
-					try {
-						resultSet.close();
-					} catch (SQLException e) {
-					}
-				}
-			}
-		} /*
-			 * else { // 异常数据恢复，OS CRASH或者JVM CRASH或者机器掉电
-			 * tranStateTable.clear(); }
-			 */
+	public boolean start() {
+		
+		/*
+		 * else { // 异常数据恢复，OS CRASH或者JVM CRASH或者机器掉电 tranStateTable.clear(); }
+		 */
 
 		addTimerTask();
 
@@ -189,61 +138,44 @@ public class JDBCTransactionStore implements TransactionStore {
 		return res;
 	}
 
-	// public void remove(List<Long> pks) {
-	@Override
-	public boolean update(//
-            final long tsOffset,//
-            final long clOffset,//
-            final int groupHashCode,//
-            final int state//
-    ){
-		tranStateTable.remove(clOffset);
-		/*
-		 * PreparedStatement statement = null; try {
-		 * this.connection.setAutoCommit(false); statement =
-		 * this.connection.prepareStatement(
-		 * "DELETE FROM t_transaction WHERE offset = ?"); for (long pk : pks) {
-		 * statement.setLong(1, pk); statement.addBatch(); } int[] executeBatch
-		 * = statement.executeBatch();
-		 * System.out.println(Arrays.toString(executeBatch));
-		 * this.connection.commit(); //this.totalRecordsValue.addAndGet(-
-		 * updatedRows(executeBatch)); } catch (Exception e) { log.warn(
-		 * "createDB Exception", e); } finally { if (null != statement) { try {
-		 * statement.close(); } catch (SQLException e) { } } }
-		 */
-		return true;
-	}
-
 	// @Override
 	public long totalRecords() {
-		// TODO Auto-generated method stub
 		return this.totalRecordsValue.get();
 	}
 
-	// @Override
-	public long minPK() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	// @Override
-	public long maxPK() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	// public boolean put(List<TransactionRecord> trs) {
 	@Override
-	public boolean put(TransactionRecord tr) {
-		tranStateTable.put(tr.getOffset(), tr);
+	public boolean execute(DispatchRequest req) {
+		final int tranType = MessageSysFlag.getTransactionValue(req.getSysFlag());
+		int groupHashCode = req.getProducerGroup() == null ? PreparedMessageTagsCode
+				: req.getProducerGroup().hashCode();
+		if (groupHashCode == -1)
+			log.warn("groupHashCode is -1, StackTrace: {}", UtilAll.currentStackTrace());
+		switch (tranType) {
+		case MessageSysFlag.TransactionNotType:
+			break;
+		case MessageSysFlag.TransactionPreparedType:
+			TransactionRecord tr = tranStateTable.newValueInstance();
+			tr.setOffset(req.getCommitLogOffset());
+			tr.setTranStateOffset(req.getConsumeQueueOffset());
+
+			tr.setPgroupHashCode(groupHashCode);
+			tr.setMsgSize(req.getMsgSize());
+			tr.setTimestamp((int) (req.getStoreTimestamp() / 1000));
+			tranStateTable.put(req.getCommitLogOffset(), tr);
+			return true;
+		case MessageSysFlag.TransactionCommitType:
+		case MessageSysFlag.TransactionRollbackType:
+			return tranStateTable.remove(req.getPreparedTransactionOffset()) != null;
+		}
+
 		return true;
 	}
 
 	private void addTimerTask() {
 		this.timer.scheduleAtFixedRate(new TimerTask() {
-			private final long checkTransactionMessageAtleastInterval = JDBCTransactionStore.this.jdbcTransactionStoreConfig
-					.getCheckTransactionMessageAtleastInterval();
-			private final boolean slave = JDBCTransactionStore.this.brokerController.getMessageStoreConfig()
+			private final long checkTransactionMessageAtleastInterval = JDBCTransactionStore.this.messageStore
+					.getMessageStoreConfig().getCheckTransactionMessageAtleastInterval();
+			private final boolean slave = JDBCTransactionStore.this.messageStore.getMessageStoreConfig()
 					.getBrokerRole() == BrokerRole.SLAVE;
 
 			@Override
@@ -269,7 +201,7 @@ public class JDBCTransactionStore implements TransactionStore {
 						// preparedMessageCountInThisMapedFile++;
 
 						try {
-							gotoCheck(//
+							messageStore.getTransactionCheckExecuter().gotoCheck(//
 									tr.getPgroupHashCode(), // Producer Group
 															// Hashcode
 									tr.getTranStateOffset(), // getTranStateOffset(i),//Transaction
@@ -310,7 +242,7 @@ public class JDBCTransactionStore implements TransactionStore {
 			 * offset = (this.mapedFile.getFileFromOffset() + currentIndex) /
 			 * TransactionStateService.TSStoreUnitSize; return offset; }
 			 */
-		}, 1000 * 60, this.jdbcTransactionStoreConfig.getCheckTransactionMessageTimerInterval());
+		}, 1000 * 60, this.messageStore.getMessageStoreConfig().getCheckTransactionMessageTimerInterval());
 	}
 
 	public void shutdown() {
@@ -366,6 +298,7 @@ public class JDBCTransactionStore implements TransactionStore {
 				} catch (SQLException e) {
 				}
 			}
+			tranStateTable.clear();
 		}
 
 		try {
@@ -377,32 +310,115 @@ public class JDBCTransactionStore implements TransactionStore {
 	}
 
 	@Override
-	public void gotoCheck(int producerGroupHashCode, long tranStateTableOffset, long commitLogOffset, int msgSize) {
-		// 第一步、查询Producer
-		final ClientChannelInfo clientChannelInfo = JDBCTransactionStore.this.brokerController.getProducerManager()
-				.pickProducerChannelRandomly(producerGroupHashCode);
-		if (null == clientChannelInfo) {
-			log.warn("check a producer transaction state, but not find any channel of this group[{}]",
-					producerGroupHashCode);
-			return;
+	public boolean load() {
+		try {
+			Class.forName(this.messageStore.getMessageStoreConfig().getJdbcDriverClass()).newInstance();
+			log.info("Loaded the appropriate driver, {}",
+					this.messageStore.getMessageStoreConfig().getJdbcDriverClass());
+		} catch (Exception e) {
+			log.info("Loaded the appropriate driver Exception", e);
+			return false;
 		}
+		Properties props = new Properties();
+		props.put("user", messageStore.getMessageStoreConfig().getJdbcUser());
+		props.put("password", messageStore.getMessageStoreConfig().getJdbcPassword());
 
-		// 第二步、查询消息
-		SelectMapedBufferResult selectMapedBufferResult = JDBCTransactionStore.this.brokerController.getMessageStore()
-				.selectOneMessageByOffset(commitLogOffset, msgSize);
-		if (null == selectMapedBufferResult) {
-			log.warn("check a producer transaction state, but not find message by commitLogOffset: {}, msgSize: {}",
-					commitLogOffset, msgSize);
-			return;
+		try {
+			this.connection = DriverManager.getConnection(this.messageStore.getMessageStoreConfig().getJdbcURL(),
+					props);
+
+			this.connection.setAutoCommit(false);
+
+			// 如果表不存在，尝试初始化表
+			if (!this.computeTotalRecords()) {
+				return this.createDB();
+			}
+
+		} catch (SQLException e) {
+			log.error("Create JDBC Connection Exeption", e);
+			return false;
 		}
+		return true;
+	}
 
-		// ByteBuffer bb = selectMapedBufferResult.getByteBuffer();
+	@Override
+	public void recoverTranRedoLog(boolean lastExitOK) {
+		// 正常数据恢复
+		if (lastExitOK) {
+			Statement statement = null;
+			ResultSet resultSet = null;
+			try {
+				statement = JDBCTransactionStore.this.connection.createStatement();
+				resultSet = statement.executeQuery("select offset,pgrouphashcode,msgsize,timestamp from t_transaction");
+				while (resultSet.next()) {
+					TransactionRecord tr = tranStateTable.newValueInstance();
+					tr.setOffset(resultSet.getLong(1));
+					tr.setPgroupHashCode(resultSet.getInt(2));
+					tr.setMsgSize(resultSet.getInt(3));
+					tr.setTimestamp(resultSet.getInt(4));
+					tranStateTable.put(tr.getOffset(), tr);
+				}
+			} catch (Exception e) {
+				log.warn("computeTotalRecords Exception", e);
+				return;
+			} finally {
+				if (null != statement) {
+					try {
+						statement.close();
+					} catch (SQLException e) {
+					}
+				}
 
-		// 第三步、向Producer发起请求
-		final CheckTransactionStateRequestHeader requestHeader = new CheckTransactionStateRequestHeader();
-		requestHeader.setCommitLogOffset(commitLogOffset);
-		requestHeader.setTranStateTableOffset(tranStateTableOffset);
-		JDBCTransactionStore.this.brokerController.getBroker2Client()
-				.checkProducerTransactionState(clientChannelInfo.getChannel(), requestHeader, selectMapedBufferResult);
+				if (null != resultSet) {
+					try {
+						resultSet.close();
+					} catch (SQLException e) {
+					}
+				}
+			}
+		}
+	}
+
+	@Override
+	public void recoverStateTable(boolean lastExitOK) {
+		if (!lastExitOK) {
+			for (TransactionRecord tr : tranStateTable.values()) {
+				MessageExt msgExt = this.messageStore.lookMessageByOffset(tr.getOffset());
+				if (msgExt != null) {
+					if(tr.getTranStateOffset()!=msgExt.getQueueOffset()){
+						log.warn("tranStateOffset error recover TranStateOffset: {} and commitLog's TranStateOffset: {}", tr.getTranStateOffset(),msgExt.getQueueOffset());
+					}
+					tr.setPgroupHashCode(msgExt.getProperty(MessageConst.PROPERTY_PRODUCER_GROUP).hashCode());
+					tr.setTranStateOffset(tranStateTableOffset.get());
+					this.tranStateTableOffset.incrementAndGet();
+				}
+			}
+		}
+	}
+
+	@Override
+	public int deleteExpiredRedoLogFile(long minOffset) {
+		return 0;
+	}
+
+	@Override
+	public int deleteExpiredStateFile(long minOffset) {
+		return 0;
+	}
+
+	@Override
+	public void commitRedoLog(int flushConsumeQueueLeastPages) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public long getTranStateTableOffset() {
+		return tranStateTableOffset.get();
+	}
+
+	@Override
+	public long incrementTranStateTableOffset() {
+		return tranStateTableOffset.incrementAndGet();
 	}
 }

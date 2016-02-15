@@ -51,6 +51,8 @@ target/
 .idea/
 target/
 logs/
+store/
+Servers/
 .classpath
 .project
 .settings/

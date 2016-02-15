@@ -345,7 +345,7 @@ public class CommitLog {
                                         .computeDeliverTimestamp(delayLevel, storeTimestamp);
                         }
                     }
-                    producerGroup = propertiesMap.get(MessageConst.PROPERTY_PRODUCER_GROUP);
+                    //producerGroup = propertiesMap.get(MessageConst.PROPERTY_PRODUCER_GROUP);
                 }
             }
 
@@ -360,6 +360,7 @@ public class CommitLog {
                 keys,// 8
                 sysFlag,// 9
                 preparedTransactionOffset,// 10
+				0L,
                 producerGroup //11
             );
         }
@@ -577,7 +578,8 @@ public class CommitLog {
                  */
                 msg.getSysFlag(),// 9
                 msg.getPreparedTransactionOffset(),// 10
-                msg.getProperties().get(MessageConst.PROPERTY_PRODUCER_GROUP) //11
+				msg.getQueueOffset(),//11
+                msg.getProperties().get(MessageConst.PROPERTY_PRODUCER_GROUP) //12
             );
 
             this.defaultMessageStore.putDispatchRequest(dispatchRequest);
@@ -1006,7 +1008,9 @@ public class CommitLog {
             // Prepared and Rollback message is not consumed, will not enter the
             // consumer queue
             case MessageSysFlag.TransactionPreparedType:
-                queueOffset = 0L;
+            	if(defaultMessageStore.getTransactionStore()!=null)
+            		queueOffset =
+                        CommitLog.this.defaultMessageStore.getTransactionStore().getTranStateTableOffset();
                 break;
             case MessageSysFlag.TransactionRollbackType:
                 queueOffset = msgInner.getQueueOffset();
@@ -1122,6 +1126,9 @@ public class CommitLog {
 
             switch (tranType) {
             case MessageSysFlag.TransactionPreparedType:
+            	if(defaultMessageStore.getTransactionStore()!=null)
+            		CommitLog.this.defaultMessageStore.getTransactionStore().incrementTranStateTableOffset();//humphery
+                break;
             case MessageSysFlag.TransactionRollbackType:
                 break;
             case MessageSysFlag.TransactionNotType:

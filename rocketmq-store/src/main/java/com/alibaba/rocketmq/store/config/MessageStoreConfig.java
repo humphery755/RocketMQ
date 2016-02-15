@@ -15,10 +15,10 @@
  */
 package com.alibaba.rocketmq.store.config;
 
+import java.io.File;
+
 import com.alibaba.rocketmq.common.annotation.ImportantField;
 import com.alibaba.rocketmq.store.ConsumeQueue;
-
-import java.io.File;
 
 
 /**
@@ -27,7 +27,7 @@ import java.io.File;
  * @author shijia.wxr<vintage.wang@gmail.com>
  * @since 2013-7-21
  */
-public class MessageStoreConfig {
+public class MessageStoreConfig extends JDBCTransactionStoreConfig{
     // 存储跟目录
     @ImportantField
     private String storePathRootDir = System.getProperty("user.home") + File.separator + "store";
@@ -39,8 +39,6 @@ public class MessageStoreConfig {
 
     private int tranRedoLogMapedFileSize=1024 * 1024 * 1024;
     private int tranStateTableMapedFileSize=1024 * 1024 * 1024;
-    private int checkTransactionMessageAtleastInterval=1000 * 30;
-    private int checkTransactionMessageTimerInterval=1000 * 30;
     // CommitLog每个文件大小 1G
     private int mapedFileSizeCommitLog = 1024 * 1024 * 1024;
     // ConsumeQueue每个文件大小 默认存储30W条消息
@@ -615,25 +613,5 @@ public class MessageStoreConfig {
 
 	public void setTranRedoLogMapedFileSize(int tranRedoLogMapedFileSize) {
 		this.tranRedoLogMapedFileSize = tranRedoLogMapedFileSize;
-	}
-
-
-	public int getCheckTransactionMessageAtleastInterval() {
-		return checkTransactionMessageAtleastInterval;
-	}
-
-
-	public void setCheckTransactionMessageAtleastInterval(int checkTransactionMessageAtleastInterval) {
-		this.checkTransactionMessageAtleastInterval = checkTransactionMessageAtleastInterval;
-	}
-
-
-	public int getCheckTransactionMessageTimerInterval() {
-		return checkTransactionMessageTimerInterval;
-	}
-
-
-	public void setCheckTransactionMessageTimerInterval(int checkTransactionMessageTimerInterval) {
-		this.checkTransactionMessageTimerInterval = checkTransactionMessageTimerInterval;
 	}
 }

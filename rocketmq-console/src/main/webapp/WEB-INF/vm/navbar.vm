@@ -2,7 +2,7 @@
     <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
           <div class="container">
                 <div class="navbar-header">
-                  <a class="navbar-brand" href="/">RocketMQ Console</a>
+                  <a class="navbar-brand" href="$root">RocketMQ Console</a>
                 </div>
                 <div class="navbar-collapse collapse">
                       <ul class="nav navbar-nav">
@@ -43,7 +43,11 @@
                                   </ul>
                             </li>
                             <li class="dropdown $!offset_flag">
-                                 <a href="$root/offset/resetOffsetByTime.do">Offset</a>
+                                 <a href="#" class="dropdown-toggle" data-toggle="dropdown">Offset <b class="caret"></b></a>
+                                  <ul class="dropdown-menu">
+                                    <li><a href="$root/offset/resetOffsetByTime.do">resetOffsetByTime</a></li>
+                                    <li><a href="$root/offset/viewMessageByPhyOffset.do">QueryCommitOffset</a></li>
+                                  </ul>
                             </li>
 							<li class="dropdown $!consumer_flag">
                                   <a href="#" class="dropdown-toggle" data-toggle="dropdown">Consumer <b class="caret"></b></a>

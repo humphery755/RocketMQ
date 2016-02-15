@@ -15,7 +15,28 @@
  */
 package com.alibaba.rocketmq.broker;
 
-import com.alibaba.rocketmq.broker.client.*;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.alibaba.rocketmq.broker.client.ClientHousekeepingService;
+import com.alibaba.rocketmq.broker.client.ConsumerIdsChangeListener;
+import com.alibaba.rocketmq.broker.client.ConsumerManager;
+import com.alibaba.rocketmq.broker.client.DefaultConsumerIdsChangeListener;
+import com.alibaba.rocketmq.broker.client.ProducerManager;
 import com.alibaba.rocketmq.broker.client.net.Broker2Client;
 import com.alibaba.rocketmq.broker.client.rebalance.RebalanceLockManager;
 import com.alibaba.rocketmq.broker.filtersrv.FilterServerManager;
@@ -24,13 +45,22 @@ import com.alibaba.rocketmq.broker.mqtrace.ConsumeMessageHook;
 import com.alibaba.rocketmq.broker.mqtrace.SendMessageHook;
 import com.alibaba.rocketmq.broker.offset.ConsumerOffsetManager;
 import com.alibaba.rocketmq.broker.out.BrokerOuterAPI;
-import com.alibaba.rocketmq.broker.processor.*;
+import com.alibaba.rocketmq.broker.processor.AdminBrokerProcessor;
+import com.alibaba.rocketmq.broker.processor.ClientManageProcessor;
+import com.alibaba.rocketmq.broker.processor.EndTransactionProcessor;
+import com.alibaba.rocketmq.broker.processor.PullMessageProcessor;
+import com.alibaba.rocketmq.broker.processor.QueryMessageProcessor;
+import com.alibaba.rocketmq.broker.processor.SendMessageProcessor;
 import com.alibaba.rocketmq.broker.slave.SlaveSynchronize;
 import com.alibaba.rocketmq.broker.subscription.SubscriptionGroupManager;
 import com.alibaba.rocketmq.broker.topic.TopicConfigManager;
-import com.alibaba.rocketmq.broker.transaction.jdbc.JDBCTransactionStore;
-import com.alibaba.rocketmq.broker.transaction.jdbc.JDBCTransactionStoreConfig;
-import com.alibaba.rocketmq.common.*;
+import com.alibaba.rocketmq.broker.transaction.DefaultTransactionCheckExecuter;
+import com.alibaba.rocketmq.common.BrokerConfig;
+import com.alibaba.rocketmq.common.DataVersion;
+import com.alibaba.rocketmq.common.MixAll;
+import com.alibaba.rocketmq.common.ThreadFactoryImpl;
+import com.alibaba.rocketmq.common.TopicConfig;
+import com.alibaba.rocketmq.common.UtilAll;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.constant.PermName;
 import com.alibaba.rocketmq.common.namesrv.RegisterBrokerResult;
@@ -48,16 +78,7 @@ import com.alibaba.rocketmq.store.config.BrokerRole;
 import com.alibaba.rocketmq.store.config.MessageStoreConfig;
 import com.alibaba.rocketmq.store.stats.BrokerStats;
 import com.alibaba.rocketmq.store.stats.BrokerStatsManager;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.concurrent.*;
+import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStore;
 
 
 /**
@@ -70,12 +91,15 @@ public class BrokerController {
     private final NettyServerConfig nettyServerConfig;
     private final NettyClientConfig nettyClientConfig;
     private final MessageStoreConfig messageStoreConfig;
-    private final JDBCTransactionStoreConfig jdbcTransactionStoreConfig;
     private final DataVersion configDataVersion = new DataVersion();
     private final ConsumerOffsetManager consumerOffsetManager;
     private final ConsumerManager consumerManager;
     private final ProducerManager producerManager;
     private final ClientHousekeepingService clientHousekeepingService;
+	
+	// Broker主动回查Producer事务状态
+    private final DefaultTransactionCheckExecuter defaultTransactionCheckExecuter;
+	
     private final PullMessageProcessor pullMessageProcessor;
     private final PullRequestHoldService pullRequestHoldService;
     private final Broker2Client broker2Client;
@@ -110,14 +134,12 @@ public class BrokerController {
             final BrokerConfig brokerConfig, //
             final NettyServerConfig nettyServerConfig, //
             final NettyClientConfig nettyClientConfig, //
-            final MessageStoreConfig messageStoreConfig, //
-            final JDBCTransactionStoreConfig jdbcTransactionStoreConfig //
+            final MessageStoreConfig messageStoreConfig //
     ) {
         this.brokerConfig = brokerConfig;
         this.nettyServerConfig = nettyServerConfig;
         this.nettyClientConfig = nettyClientConfig;
         this.messageStoreConfig = messageStoreConfig;
-        this.jdbcTransactionStoreConfig = jdbcTransactionStoreConfig;
         this.consumerOffsetManager = new ConsumerOffsetManager(this);
         this.topicConfigManager = new TopicConfigManager(this);
         this.pullMessageProcessor = new PullMessageProcessor(this);
@@ -146,6 +168,7 @@ public class BrokerController {
         this.brokerStatsManager = new BrokerStatsManager(this.brokerConfig.getBrokerClusterName());
         this.setStoreHost(new InetSocketAddress(this.getBrokerConfig().getBrokerIP1(), this
             .getNettyServerConfig().getListenPort()));
+		this.defaultTransactionCheckExecuter = new DefaultTransactionCheckExecuter(this);
     }
 
 
@@ -159,7 +182,7 @@ public class BrokerController {
 
         if (result) {
             try {
-                this.messageStore = new DefaultMessageStore(this.messageStoreConfig, this.brokerStatsManager, new JDBCTransactionStore(jdbcTransactionStoreConfig,this));
+                this.messageStore = new DefaultMessageStore(this.messageStoreConfig,defaultTransactionCheckExecuter, this.brokerStatsManager);
             }
             catch (IOException e) {
                 result = false;

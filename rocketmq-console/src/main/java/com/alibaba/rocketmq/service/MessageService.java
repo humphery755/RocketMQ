@@ -92,6 +92,7 @@ public class MessageService extends AbstractService {
             // msg.getCommitLogOffset()//
             // );
             map.put("CommitLog Offset:", String.valueOf(msg.getCommitLogOffset()));
+            map.put("Store Size:", String.valueOf(msg.getStoreSize()));
 
             // System.out.printf("%-20s %s\n",//
             // "Born Timestamp:",//

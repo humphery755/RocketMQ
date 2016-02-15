@@ -1,87 +1,70 @@
 package com.alibaba.rocketmq.broker.transaction.jdbc;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.junit.Assert;
 import org.junit.Test;
-
-import com.alibaba.rocketmq.store.transaction.TransactionRecord;
-import com.alibaba.rocketmq.store.transaction.TransactionStore;
-
 
 public class JDBCTransactionStoreTest {
 
-    @Test
-    public void test_derby_open() {
-        JDBCTransactionStoreConfig config = new JDBCTransactionStoreConfig();
-        config.setJdbcDriverClass("org.apache.derby.jdbc.EmbeddedDriver");
-        config.setJdbcURL("jdbc:derby:xxx;create=true");
-        config.setJdbcUser("xxx");
-        config.setJdbcPassword("xxx");
-        TransactionStore store = new JDBCTransactionStore(config,null);
+	// @Test
+	public void test_derby_open() {
 
-        boolean open = store.start(true);
-        System.out.println(open);
-        Assert.assertTrue(open);
-        store.shutdown();
-    }
+	/*	TransactionStore store = new JDBCTransactionStore(config, null);
 
+		boolean open = store.start(true);
+		System.out.println(open);
+		Assert.assertTrue(open);
+		store.shutdown();*/
+	}
 
-    // @Test
-    public void test_mysql_open() {
-        JDBCTransactionStoreConfig config = new JDBCTransactionStoreConfig();
+	// @Test
+	public void test_mysql_open() {
 
-        TransactionStore store = new JDBCTransactionStore(config,null);
+		/*TransactionStore store = new JDBCTransactionStore(config, null);
 
-        boolean open = store.start(true);
-        System.out.println(open);
-        Assert.assertTrue(open);
-        store.shutdown();
-    }
+		boolean open = store.start(true);
+		System.out.println(open);
+		Assert.assertTrue(open);
+		store.shutdown();*/
+	}
 
+	@Test
+	public void test_preparCommit() {
 
-    // @Test
-    public void test_mysql_put() {
-        JDBCTransactionStoreConfig config = new JDBCTransactionStoreConfig();
+		/*TransactionStore store = new JDBCTransactionStore(config, null);
+		
+		 * boolean open = store.start(true); System.out.println(open);
+		 * Assert.assertTrue(open);
+		 
 
-        TransactionStore store = new JDBCTransactionStore(config,null);
+		long begin = System.currentTimeMillis();
+		List<TransactionRecord> trs = new ArrayList<TransactionRecord>();
+		Map<Long, DispatchRequest> stateTable = new HashMap();
+		Map<Long, DispatchRequest> stateTable1 = new HashMap();
+		int count = 2000000;
+		int j = 0;
+		int i = 0;
+		while (true) {
+			DispatchRequest req = new DispatchRequest("topic", 0, j, 122, i, System.currentTimeMillis(), 0, "key",0, -1,
+					"group");
+			j++;
+			DispatchRequest req1 = new DispatchRequest("topic", 0, j, 122, i, System.currentTimeMillis(), 0, "key", 0, j-1,
+					"group");
+			store.preparedTransaction(req);
+			store.commitTransaction(req1);
+			j++;
+			i++;
+		}*/
 
-        boolean open = store.start(true);
-        System.out.println(open);
-        Assert.assertTrue(open);
+	}
 
-        long begin = System.currentTimeMillis();
-        List<TransactionRecord> trs = new ArrayList<TransactionRecord>();
-        for (int i = 0; i < 20; i++) {
-            TransactionRecord tr = new TransactionRecord();
-            tr.setOffset(i);
-            tr.setPgroupHashCode(("PG_" + i).hashCode());
-            boolean write = store.put(tr);
-        }
+	// @Test
+	public void test_mysql_remove() {
 
+		/*TransactionStore store = new JDBCTransactionStore(config, null);
 
+		boolean open = store.start(true);
+		System.out.println(open);
+		Assert.assertTrue(open);
 
-        System.out.println("TIME=" + (System.currentTimeMillis() - begin));
-
-
-        store.start(true);
-    }
-
-
-    // @Test
-    public void test_mysql_remove() {
-        JDBCTransactionStoreConfig config = new JDBCTransactionStoreConfig();
-
-        TransactionStore store = new JDBCTransactionStore(config,null);
-
-        boolean open = store.start(true);
-        System.out.println(open);
-        Assert.assertTrue(open);
-
-
-
-
-        store.shutdown();
-    }
+		store.shutdown();*/
+	}
 }

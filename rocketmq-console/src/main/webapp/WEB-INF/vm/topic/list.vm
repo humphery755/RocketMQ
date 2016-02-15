@@ -1,6 +1,7 @@
 
       <div class="container">
       <button class="btn btn-sm btn-success" type="button" onclick="add()">Add</button>
+      <a href="$root/topic/list.do?filter=0">Query All Topic</a>
       </div>
 	  <p>&nbsp;</p>
       <div class="container theme-showcase"><!-- /container  -->

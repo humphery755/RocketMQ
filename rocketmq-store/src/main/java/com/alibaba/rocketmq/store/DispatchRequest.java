@@ -35,6 +35,7 @@ public class DispatchRequest {
      */
     private final int sysFlag;
     private final long preparedTransactionOffset;
+	private final long tranStateTableOffset;
     private final String producerGroup;
 
     public DispatchRequest(//
@@ -51,7 +52,8 @@ public class DispatchRequest {
              */
             final int sysFlag,// 9
             final long preparedTransactionOffset,// 10
-            final String producerGroup //11
+			final long tranStateTableOffset,// 11
+            final String producerGroup //12
     ) {
         this.topic = topic;
         this.queueId = queueId;
@@ -67,6 +69,7 @@ public class DispatchRequest {
          */
         this.sysFlag = sysFlag;
         this.preparedTransactionOffset = preparedTransactionOffset;
+		this.tranStateTableOffset=tranStateTableOffset;
         this.producerGroup = producerGroup;
     }
 
@@ -94,6 +97,7 @@ public class DispatchRequest {
          */
         this.sysFlag = 0;
         this.preparedTransactionOffset = 0;
+		this.tranStateTableOffset=0;
         this.producerGroup = null;
     }
 
@@ -147,6 +151,9 @@ public class DispatchRequest {
         return preparedTransactionOffset;
     }
 
+	public long getTranStateTableOffset() {
+        return tranStateTableOffset;
+    }
     public String getProducerGroup() {
         return producerGroup;
     }

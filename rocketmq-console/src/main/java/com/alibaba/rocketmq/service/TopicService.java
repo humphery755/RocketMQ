@@ -44,7 +44,7 @@ public class TopicService extends AbstractService {
 
 
     @CmdTrace(cmdClazz = TopicListSubCommand.class)
-    public Table list() throws Throwable {
+    public Table list(String filter) throws Throwable {
         Throwable t = null;
         DefaultMQAdminExt defaultMQAdminExt = getDefaultMQAdminExt();
         try {
@@ -54,6 +54,9 @@ public class TopicService extends AbstractService {
             if (row > 0) {
                 Table table = new Table(new String[] { "topic" }, row);
                 for (String topicName : topicList.getTopicList()) {
+                	if(filter==null){
+                		if(topicName.startsWith("%"))continue;
+                	}
                     Object[] tr = table.createTR();
                     tr[0] = topicName;
                     table.insertTR(tr);

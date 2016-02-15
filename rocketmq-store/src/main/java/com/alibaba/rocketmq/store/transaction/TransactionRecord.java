@@ -1,8 +1,8 @@
 package com.alibaba.rocketmq.store.transaction;
 
-public class TransactionRecord {
+public interface TransactionRecord {
     // Message Size
-    private int msgSize;
+/*    private int msgSize;
     // Timestamp
     int timestamp;
     // Commit Log Offset
@@ -10,47 +10,26 @@ public class TransactionRecord {
 
     private long tranStateOffset;
     // Producer Group Hashcode
-    private int pgroupHashCode;
+    private int pgroupHashCode;*/
 
 
-    public long getOffset() {
-        return offset;
-    }
+    public long getOffset();
 
 
-    public void setOffset(long offset) {
-        this.offset = offset;
-    }
+    public void setOffset(long offset);
 
-    public long getTranStateOffset() {
-        return tranStateOffset;
-    }
+    public long getTranStateOffset();
 
-    public void setTranStateOffset(long tranStateOffset) {
-        this.tranStateOffset = tranStateOffset;
-    }
+    public void setTranStateOffset(long tranStateOffset);
 
-    public int getPgroupHashCode() {
-        return pgroupHashCode;
-    }
+    public int getPgroupHashCode();
 
-    public void setPgroupHashCode(int pgroupHashCode) {
-        this.pgroupHashCode = pgroupHashCode;
-    }
+    public void setPgroupHashCode(int pgroupHashCode) ;
+    public int getMsgSize() ;
 
-    public int getMsgSize() {
-        return msgSize;
-    }
+    public void setMsgSize(int msgSize) ;
 
-    public void setMsgSize(int msgSize) {
-        this.msgSize = msgSize;
-    }
+    public int getTimestamp();
 
-    public int getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(int timestamp) {
-        this.timestamp = timestamp;
-    }
+    public void setTimestamp(int timestamp);
 }
