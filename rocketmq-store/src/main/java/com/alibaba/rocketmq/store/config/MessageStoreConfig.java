@@ -34,8 +34,7 @@ public class MessageStoreConfig extends JDBCTransactionStoreConfig{
 
     // CommitLog存储目录
     @ImportantField
-    private String storePathCommitLog = System.getProperty("user.home") + File.separator + "store"
-            + File.separator + "commitlog";
+    private String storePathCommitLog = storePathRootDir + File.separator + "commitlog";
 
     private int tranRedoLogMapedFileSize=1024 * 1024 * 1024;
     private int tranStateTableMapedFileSize=1024 * 1024 * 1024;

@@ -360,7 +360,7 @@ public class CommitLog {
                 keys,// 8
                 sysFlag,// 9
                 preparedTransactionOffset,// 10
-				0L,
+                queueOffset, //0L TODO: humphery
                 producerGroup //11
             );
         }
@@ -498,6 +498,7 @@ public class CommitLog {
         String topic = msg.getTopic();
         int queueId = msg.getQueueId();
         long tagsCode = msg.getTagsCode();
+        
 
         final int tranType = MessageSysFlag.getTransactionValue(msg.getSysFlag());
         if (tranType == MessageSysFlag.TransactionNotType//
@@ -578,7 +579,7 @@ public class CommitLog {
                  */
                 msg.getSysFlag(),// 9
                 msg.getPreparedTransactionOffset(),// 10
-				msg.getQueueOffset(),//11
+                tranType==MessageSysFlag.TransactionPreparedType?result.getLogicsOffset():msg.getQueueOffset(),//11
                 msg.getProperties().get(MessageConst.PROPERTY_PRODUCER_GROUP) //12
             );
 

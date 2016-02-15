@@ -138,25 +138,20 @@ public class JDBCTransactionStore implements TransactionStore {
 		return res;
 	}
 
-	// @Override
-	public long totalRecords() {
-		return this.totalRecordsValue.get();
-	}
-
 	@Override
 	public boolean execute(DispatchRequest req) {
 		final int tranType = MessageSysFlag.getTransactionValue(req.getSysFlag());
 		int groupHashCode = req.getProducerGroup() == null ? PreparedMessageTagsCode
 				: req.getProducerGroup().hashCode();
-		if (groupHashCode == -1)
-			log.warn("groupHashCode is -1, StackTrace: {}", UtilAll.currentStackTrace());
+/*		if (groupHashCode == -1)
+			log.warn("groupHashCode is -1, StackTrace: {}", UtilAll.currentStackTrace());*/
 		switch (tranType) {
 		case MessageSysFlag.TransactionNotType:
 			break;
 		case MessageSysFlag.TransactionPreparedType:
 			TransactionRecord tr = tranStateTable.newValueInstance();
 			tr.setOffset(req.getCommitLogOffset());
-			tr.setTranStateOffset(req.getConsumeQueueOffset());
+			tr.setTranStateOffset(req.getTranStateTableOffset());
 
 			tr.setPgroupHashCode(groupHashCode);
 			tr.setMsgSize(req.getMsgSize());
@@ -185,8 +180,8 @@ public class JDBCTransactionStore implements TransactionStore {
 					return;
 
 				try {
-					// long preparedMessageCountInThisMapedFile = 0;
-
+					int preparedMessageCount = 0;
+					int total=tranStateTable.size();
 					for (Map.Entry<Long, TransactionRecord> entry : tranStateTable.entrySet()) {
 						TransactionRecord tr = entry.getValue();
 
@@ -198,7 +193,7 @@ public class JDBCTransactionStore implements TransactionStore {
 							continue;
 						}
 
-						// preparedMessageCountInThisMapedFile++;
+						preparedMessageCount++;
 
 						try {
 							messageStore.getTransactionCheckExecuter().gotoCheck(//
@@ -225,7 +220,7 @@ public class JDBCTransactionStore implements TransactionStore {
 					 */
 
 					log.info(
-							"the transaction timer task execute over in this period, {} Prepared Message: {} Check Progress: {}/{}"
+							"the transaction timer task execute over in this period, Prepared Message: {} Check Progress: {}/{}",preparedMessageCount,tranStateTable.size(),total
 					// mapedFile.getFileName(),//
 					// preparedMessageCountInThisMapedFile//
 					// i / TSStoreUnitSize,//
@@ -389,8 +384,8 @@ public class JDBCTransactionStore implements TransactionStore {
 						log.warn("tranStateOffset error recover TranStateOffset: {} and commitLog's TranStateOffset: {}", tr.getTranStateOffset(),msgExt.getQueueOffset());
 					}
 					tr.setPgroupHashCode(msgExt.getProperty(MessageConst.PROPERTY_PRODUCER_GROUP).hashCode());
-					tr.setTranStateOffset(tranStateTableOffset.get());
-					this.tranStateTableOffset.incrementAndGet();
+					if(tranStateTableOffset.get()<tr.getTranStateOffset())
+						this.tranStateTableOffset.set(tr.getTranStateOffset()+1);
 				}
 			}
 		}
