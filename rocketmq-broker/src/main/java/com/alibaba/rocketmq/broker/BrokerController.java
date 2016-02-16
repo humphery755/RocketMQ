@@ -78,7 +78,6 @@ import com.alibaba.rocketmq.store.config.BrokerRole;
 import com.alibaba.rocketmq.store.config.MessageStoreConfig;
 import com.alibaba.rocketmq.store.stats.BrokerStats;
 import com.alibaba.rocketmq.store.stats.BrokerStatsManager;
-import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStore;
 
 
 /**

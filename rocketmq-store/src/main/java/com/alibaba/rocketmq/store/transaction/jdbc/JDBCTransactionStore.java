@@ -408,7 +408,6 @@ public class JDBCTransactionStore implements TransactionStore {
 
 	@Override
 	public void commitRedoLog(int flushConsumeQueueLeastPages) {
-		// TODO Auto-generated method stub
 
 	}
 
