@@ -1,20 +1,7 @@
 package com.alibaba.rocketmq.store.transaction.jdbc;
 
 public interface TransactionRecord {
-    // Message Size
-/*    private int msgSize;
-    // Timestamp
-    int timestamp;
-    // Commit Log Offset
-    private long offset;
-
-    private long tranStateOffset;
-    // Producer Group Hashcode
-    private int pgroupHashCode;*/
-
-
     public long getOffset();
-
 
     public void setOffset(long offset);
 

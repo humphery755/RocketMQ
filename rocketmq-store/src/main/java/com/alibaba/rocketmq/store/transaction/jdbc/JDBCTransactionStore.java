@@ -40,7 +40,7 @@ public class JDBCTransactionStore implements TransactionStore {
 	private final DefaultMessageStore messageStore;
 	// 定时回查线程
 	private final Timer timer = new Timer("CheckTransactionMessageTimer", true);
-	// TODO:未提交事务消息过多时存在内存被撑爆，待优化
+	// TODO: 2G堆外内存约可承载5000万prepareTransaction？ 2G/36B
 	private final ChronicleMap<Long, TransactionRecord> tranStateTable;
 	// State Table Offset，重启时，必须纠正
 	private final AtomicLong tranStateTableOffset = new AtomicLong(0);
