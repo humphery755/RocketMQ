@@ -25,7 +25,6 @@ import com.alibaba.rocketmq.common.sysflag.MessageSysFlag;
 import com.alibaba.rocketmq.store.DefaultMessageStore;
 import com.alibaba.rocketmq.store.DispatchRequest;
 import com.alibaba.rocketmq.store.config.BrokerRole;
-import com.alibaba.rocketmq.store.transaction.TransactionRecord;
 import com.alibaba.rocketmq.store.transaction.TransactionStore;
 
 import net.openhft.chronicle.map.ChronicleMap;
@@ -196,6 +195,7 @@ public class JDBCTransactionStore implements TransactionStore {
 						preparedMessageCount++;
 
 						try {
+							
 							messageStore.getTransactionCheckExecuter().gotoCheck(//
 									tr.getPgroupHashCode(), // Producer Group
 															// Hashcode
@@ -208,7 +208,7 @@ public class JDBCTransactionStore implements TransactionStore {
 									tr.getMsgSize()// Message Size
 							);
 						} catch (Exception e) {
-							log.warn("gotoCheck Exception", e);
+							log.error("gotoCheck Exception", e);
 						}
 					}
 
@@ -376,19 +376,24 @@ public class JDBCTransactionStore implements TransactionStore {
 
 	@Override
 	public void recoverStateTable(boolean lastExitOK) {
-		if (!lastExitOK) {
+		//if (!lastExitOK) {
 			for (TransactionRecord tr : tranStateTable.values()) {
 				MessageExt msgExt = this.messageStore.lookMessageByOffset(tr.getOffset());
 				if (msgExt != null) {
+					if (lastExitOK) {
+						tr.setTranStateOffset(msgExt.getQueueOffset());
+					}
 					if(tr.getTranStateOffset()!=msgExt.getQueueOffset()){
 						log.warn("tranStateOffset error recover TranStateOffset: {} and commitLog's TranStateOffset: {}", tr.getTranStateOffset(),msgExt.getQueueOffset());
 					}
 					tr.setPgroupHashCode(msgExt.getProperty(MessageConst.PROPERTY_PRODUCER_GROUP).hashCode());
 					if(tranStateTableOffset.get()<tr.getTranStateOffset())
 						this.tranStateTableOffset.set(tr.getTranStateOffset()+1);
+				}else{
+					log.error("Offset error not found Message by offset: {}", tr.getOffset());
 				}
 			}
-		}
+		//}
 	}
 
 	@Override
