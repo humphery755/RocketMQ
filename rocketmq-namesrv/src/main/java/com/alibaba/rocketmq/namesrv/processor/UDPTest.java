@@ -103,10 +103,10 @@ public class UDPTest {
 	final static NettyDecoder NETTY_DECODER = new NettyDecoder();
 	private void test() throws UnknownHostException, InterruptedException{
 		PaxosRequestHeader req = new PaxosRequestHeader();
-		req.setElectionEpoch(1);
-		req.setLeader(1);
-		req.setZxid(1);
-		req.setState(1);
+		req.getBody().setElectionEpoch(1);
+		req.getBody().setLeader(1);
+		req.getBody().setZxid(1);
+		req.getBody().setState(1);
 		req.setSid(1);
 
 		RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, req);

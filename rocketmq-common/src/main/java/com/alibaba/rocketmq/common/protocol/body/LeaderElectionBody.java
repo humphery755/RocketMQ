@@ -18,6 +18,7 @@ package com.alibaba.rocketmq.common.protocol.body;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.alibaba.rocketmq.remoting.annotation.CFNotNull;
 import com.alibaba.rocketmq.remoting.protocol.RemotingSerializable;
 
 
@@ -26,15 +27,54 @@ import com.alibaba.rocketmq.remoting.protocol.RemotingSerializable;
  * @since: 14-08-06
  */
 public class LeaderElectionBody extends RemotingSerializable {
-    private Map<Integer, Long> correctionOffsets = new HashMap<Integer, Long>();
+	//被推荐的leader的id
+	private long leader;
+  //被推荐的leader的事务id
+    private long zxid;
+  //Epoch/logicalclock
+    private long electionEpoch;
+    
+  //current state of sender 
+    @CFNotNull
+    private int state;
+
+	public long getLeader() {
+		return leader;
+	}
 
 
-    public Map<Integer, Long> getCorrectionOffsets() {
-        return correctionOffsets;
-    }
+	public void setLeader(long leader) {
+		this.leader = leader;
+	}
 
 
-    public void setCorrectionOffsets(Map<Integer, Long> correctionOffsets) {
-        this.correctionOffsets = correctionOffsets;
-    }
+	public long getZxid() {
+		return zxid;
+	}
+
+
+	public void setZxid(long zxid) {
+		this.zxid = zxid;
+	}
+
+
+	public long getElectionEpoch() {
+		return electionEpoch;
+	}
+
+
+	public void setElectionEpoch(long electionEpoch) {
+		this.electionEpoch = electionEpoch;
+	}
+
+
+	public int getState() {
+		return state;
+	}
+
+
+	public void setState(int state) {
+		this.state = state;
+	}
+    
 }

@@ -292,7 +292,6 @@ public class NettyUDPServer extends NettyRemotingAbstract implements RemotingSer
 		        } else {
 		            ctx.fireChannelRead(msg);
 		        }
-				System.out.println("hello world!");
 			}
 		}
 	

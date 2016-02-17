@@ -104,35 +104,33 @@ public class PaxosController {
         	
         });
         
-		this.registerProcessor();
+        remotingServer.registerProcessor(
+				RequestCode.PAXOS_ALGORITHM_REQUEST_CODE,
+				paxosRequestProcessor,
+				namesrvController.getScheduledExecutorService());
 
-		this.namesrvController.getScheduledExecutorService()
-				.scheduleAtFixedRate(new Runnable() {
-					@Override
-					public void run() {
-						try {
-							//PaxosController.this.connectAll();
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-					}
-				}, 1, 30, TimeUnit.SECONDS);
 
 		return true;
 	}
 
-	private void registerProcessor() {
-		remotingServer.registerProcessor(
-				RequestCode.PAXOS_ALGORITHM_REQUEST_CODE,
-				paxosRequestProcessor,
-				namesrvController.getScheduledExecutorService());
-	}
 
 	public void start() throws Exception {
 		this.remotingServer.start();
 		remotingClient.start();
 		fastLeaderElection.start();
 		paxosRequestProcessor.start();
+		
+		this.namesrvController.getScheduledExecutorService()
+		.scheduleAtFixedRate(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					PaxosController.this.heartBeat();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}, 1, 60, TimeUnit.SECONDS);
 	}
 
 	public void shutdown() {
@@ -145,7 +143,7 @@ public class PaxosController {
 		nsServers.put(id, addr);
 	}
 
-	private void connectAll() throws RemotingConnectException,
+	private void heartBeat() throws RemotingConnectException,
 			RemotingSendRequestException, RemotingTimeoutException,
 			InterruptedException, RemotingTooMuchRequestException {
 		PaxosRequestHeader rHeader = new PaxosRequestHeader();

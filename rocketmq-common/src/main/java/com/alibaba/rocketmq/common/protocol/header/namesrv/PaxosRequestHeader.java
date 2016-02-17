@@ -16,47 +16,11 @@ public class PaxosRequestHeader implements CommandCustomHeader {
 	@CFNotNull
 	private int code;
 	
-	private long leader;
-	
+	//发送者的id 
     @CFNotNull
     private long sid;
-    
-    private long zxid;
-    
-    private long electionEpoch;
-    
-    @CFNotNull
-    private int state;
-
-	private LeaderElectionBody body;
-
-    @Override
-    public void checkFields() throws RemotingCommandException {
-    }
-
-	public long getSid() {
-		return sid;
-	}
-
-	public void setSid(long id) {
-		this.sid = id;
-	}
-
-	public int getCode() {
-		return code;
-	}
-
-	public void setCode(int code) {
-		this.code = code;
-	}
-
-	public int getState() {
-		return state;
-	}
-
-	public void setState(int state) {
-		this.state = state;
-	}
+	
+	LeaderElectionBody body;
 
     public LeaderElectionBody getBody() {
 		return body;
@@ -66,33 +30,23 @@ public class PaxosRequestHeader implements CommandCustomHeader {
 		this.body = body;
 	}
 
-	public long getElectionEpoch() {
-		return electionEpoch;
-	}
-
-	public void setElectionEpoch(long electionEpoch) {
-		this.electionEpoch = electionEpoch;
-	}
-
-	public long getLeader() {
-		return leader;
-	}
-
-	public void setLeader(long leader) {
-		this.leader = leader;
-	}
-
-	public long getZxid() {
-		return zxid;
-	}
-
-	public void setZxid(long zxid) {
-		this.zxid = zxid;
-	}
-
 	@Override
-	public String toString() {
-		return "PaxosRequestHeader [code=" + code + ", leader=" + leader + ", sid=" + sid + ", zxid=" + zxid + ", electionEpoch=" + electionEpoch
-				+ ", state=" + state + "]";
+    public void checkFields() throws RemotingCommandException {
+    }
+
+	public int getCode() {
+		return code;
+	}
+
+	public void setCode(int code) {
+		this.code = code;
+	}
+
+	public long getSid() {
+		return sid;
+	}
+
+	public void setSid(long sid) {
+		this.sid = sid;
 	}
 }
