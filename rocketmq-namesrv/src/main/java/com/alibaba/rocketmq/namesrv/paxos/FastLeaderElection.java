@@ -99,7 +99,12 @@ public class FastLeaderElection {
 		currentVote = new Vote(paxosController.getMyid(),zxid, logicalclock.get(), logicalclock.get());		 
 		sendNotifications();
 	}
-
+	
+	protected boolean totalOrderPredicate1(long newId, long newZxid, long newEpoch, long curId, long curZxid, long curEpoch) {
+		LOG.debug("id: " + newId + ", proposed id: " + curId + ", zxid: 0x" + Long.toHexString(newZxid) + ", proposed zxid: 0x"
+				+ Long.toHexString(curZxid));
+		return ((newEpoch == curEpoch) && ((newZxid < curZxid))&& ((newId < curId)));
+	}
 	class WorkerReceiver extends ServiceThread {
 		private final ArrayBlockingQueue<Notification> recvQueue = new ArrayBlockingQueue<Notification>(100);
 
@@ -148,6 +153,7 @@ public class FastLeaderElection {
 			case PaxosRequestHeader.LOOKING:
 				// If notification > current, replace and send messages
 				// out
+				long xid=n.zxid;
 				if (n.electionEpoch > logicalclock.get()) {
 					logicalclock.set(n.electionEpoch);
 					recvset.clear();
@@ -166,9 +172,11 @@ public class FastLeaderElection {
 				} else if (totalOrderPredicate(n.leader, n.zxid, n.electionEpoch, currentVote.getId(), currentVote.getZxid(), currentVote.getElectionEpoch())) {
 					updateProposal(n.leader, n.zxid, n.electionEpoch);
 					sendNotifications();
+				} else if(totalOrderPredicate1(n.leader, n.zxid, n.electionEpoch, currentVote.getId(), currentVote.getZxid(), currentVote.getElectionEpoch())) {
+					xid=currentVote.getZxid();
 				}
 
-				recvset.put(n.sid, new Vote(n.leader, n.zxid, n.electionEpoch, n.electionEpoch));
+				recvset.put(n.sid, new Vote(n.leader, xid, n.electionEpoch, n.electionEpoch));
 
 				if (termPredicate(recvset, new Vote(currentVote.getId(), currentVote.getZxid(), logicalclock.get(), currentVote.getElectionEpoch()))) {
 
