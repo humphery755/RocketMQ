@@ -93,7 +93,9 @@ public class PaxosRequestProcessor implements NettyRequestProcessor {
 			try {
 				paxosController.getRemotingClient().invokeOneway(s.getAddr(), reqcmd, 3000);
 			} catch (RemotingConnectException | RemotingTooMuchRequestException | RemotingTimeoutException | RemotingSendRequestException | InterruptedException e) {
-				e.printStackTrace();
+				log.error("",e);
+				response.setCode(ResponseCode.SYSTEM_ERROR);
+				return response;
 			}
 			response.setCode(ResponseCode.SUCCESS);
 			return response;
