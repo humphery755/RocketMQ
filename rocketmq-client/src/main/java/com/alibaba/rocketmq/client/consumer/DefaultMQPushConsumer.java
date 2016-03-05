@@ -131,14 +131,14 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     private boolean unitMode = false;
 
 
-    public DefaultMQPushConsumer() {
+/*    public DefaultMQPushConsumer() {
         this(MixAll.DEFAULT_CONSUMER_GROUP, null, new AllocateMessageQueueAveragely());
     }
 
 
     public DefaultMQPushConsumer(RPCHook rpcHook) {
         this(MixAll.DEFAULT_CONSUMER_GROUP, rpcHook, new AllocateMessageQueueAveragely());
-    }
+    }*/
 
 
     public DefaultMQPushConsumer(final String consumerGroup) {

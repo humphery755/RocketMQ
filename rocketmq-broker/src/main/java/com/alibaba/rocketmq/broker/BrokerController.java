@@ -55,6 +55,7 @@ import com.alibaba.rocketmq.broker.slave.SlaveSynchronize;
 import com.alibaba.rocketmq.broker.subscription.SubscriptionGroupManager;
 import com.alibaba.rocketmq.broker.topic.TopicConfigManager;
 import com.alibaba.rocketmq.broker.transaction.DefaultTransactionCheckExecuter;
+import com.alibaba.rocketmq.client.exception.MQBrokerException;
 import com.alibaba.rocketmq.common.BrokerConfig;
 import com.alibaba.rocketmq.common.DataVersion;
 import com.alibaba.rocketmq.common.MixAll;
@@ -66,12 +67,18 @@ import com.alibaba.rocketmq.common.constant.PermName;
 import com.alibaba.rocketmq.common.namesrv.RegisterBrokerResult;
 import com.alibaba.rocketmq.common.protocol.RequestCode;
 import com.alibaba.rocketmq.common.protocol.body.TopicConfigSerializeWrapper;
+import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.remoting.RPCHook;
 import com.alibaba.rocketmq.remoting.RemotingServer;
+import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
+import com.alibaba.rocketmq.remoting.exception.RemotingSendRequestException;
+import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
+import com.alibaba.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import com.alibaba.rocketmq.remoting.netty.NettyClientConfig;
 import com.alibaba.rocketmq.remoting.netty.NettyRemotingServer;
 import com.alibaba.rocketmq.remoting.netty.NettyRequestProcessor;
 import com.alibaba.rocketmq.remoting.netty.NettyServerConfig;
+import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 import com.alibaba.rocketmq.store.DefaultMessageStore;
 import com.alibaba.rocketmq.store.MessageStore;
 import com.alibaba.rocketmq.store.config.BrokerRole;
@@ -178,21 +185,26 @@ public class BrokerController {
 
         result = result && this.consumerOffsetManager.load();
         result = result && this.subscriptionGroupManager.load();
-
         if (result) {
-            try {
-                this.messageStore = new DefaultMessageStore(this.messageStoreConfig,defaultTransactionCheckExecuter, this.brokerStatsManager);
-            }
-            catch (IOException e) {
-                result = false;
-                e.printStackTrace();
-            }
-        }
-
-        result = result && this.messageStore.load();
-
-        if (result) {
-            this.remotingServer =
+	        if (this.brokerConfig.getNamesrvAddr() != null) {
+	            this.brokerOuterAPI.updateNameServerAddressList(this.brokerConfig.getNamesrvAddr());
+	        }
+	        else if (this.brokerConfig.isFetchNamesrvAddrByAddressServer()) {
+	            this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+	
+	                @Override
+	                public void run() {
+	                    try {
+	                        BrokerController.this.brokerOuterAPI.fetchNameServerAddr();
+	                    }
+	                    catch (Exception e) {
+	                        log.error("ScheduledTask fetchNameServerAddr exception", e);
+	                    }
+	                }
+	            }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
+	        }
+	        
+	        this.remotingServer =
                     new NettyRemotingServer(this.nettyServerConfig, this.clientHousekeepingService);
 
             this.sendMessageExecutor = new ThreadPoolExecutor(//
@@ -220,8 +232,50 @@ public class BrokerController {
                         new ThreadFactoryImpl("ClientManageThread_"));
 
             this.registerProcessor();
-
+            
+            try {
+                this.messageStore = new DefaultMessageStore(this.messageStoreConfig,defaultTransactionCheckExecuter, this.brokerStatsManager);
+            }
+            catch (IOException e) {
+                result = false;
+                e.printStackTrace();
+            }
+            
             this.brokerStats = new BrokerStats((DefaultMessageStore) this.messageStore);
+            if (this.brokerOuterAPI != null) {
+                this.brokerOuterAPI.start();
+            }
+	        
+			//workerReceiver.putOutofelection(currentVote);
+	        if(messageStoreConfig.getBrokerRole()==BrokerRole.UNINITIALIZED){
+	        	registerBrokerAll2(true,true);
+		        this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
+		        	
+	                @Override
+	                public void run() {
+	                    try {
+	                    	long leader=brokerOuterAPI.getLeader(brokerConfig.getNamesrvAddr());
+	                    }
+	                    catch (Exception e) {
+	                        log.error("ScheduledTask getLeader exception", e);
+	                    }
+	                }
+	            }, 1, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
+		        
+		        while(messageStoreConfig.getBrokerRole()==BrokerRole.UNINITIALIZED){
+		        	try {
+		        		Thread.currentThread().sleep(10);
+					} catch (Exception e) {
+	                    log.error("ScheduledTask fetchNameServerAddr exception", e);
+					} 
+		        	
+		        }
+	        }
+        }
+        
+        result = result && this.messageStore.load();
+
+        if (result) {
 
             // TODO remove in future
             final long initialDelay = UtilAll.computNextMorningTimeMillis() - System.currentTimeMillis();
@@ -262,23 +316,7 @@ public class BrokerController {
                 }
             }, 10, 60, TimeUnit.MINUTES);
 
-            if (this.brokerConfig.getNamesrvAddr() != null) {
-                this.brokerOuterAPI.updateNameServerAddressList(this.brokerConfig.getNamesrvAddr());
-            }
-            else if (this.brokerConfig.isFetchNamesrvAddrByAddressServer()) {
-                this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        try {
-                            BrokerController.this.brokerOuterAPI.fetchNameServerAddr();
-                        }
-                        catch (Exception e) {
-                            log.error("ScheduledTask fetchNameServerAddr exception", e);
-                        }
-                    }
-                }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
-            }
+           
 
             if (BrokerRole.SLAVE == this.messageStoreConfig.getBrokerRole()) {
                 if (this.messageStoreConfig.getHaMasterAddress() != null
@@ -539,10 +577,6 @@ public class BrokerController {
             this.remotingServer.start();
         }
 
-        if (this.brokerOuterAPI != null) {
-            this.brokerOuterAPI.start();
-        }
-
         if (this.pullRequestHoldService != null) {
             this.pullRequestHoldService.start();
         }
@@ -597,6 +631,7 @@ public class BrokerController {
             this.getBrokerAddr(), //
             this.brokerConfig.getBrokerName(), //
             this.brokerConfig.getBrokerId(), //
+            this.messageStoreConfig.getBrokerRole().ordinal(),
             this.getHAServerAddr(), //
             topicConfigWrapper,//
             this.filterServerManager.buildNewFilterServerList(),//
@@ -615,7 +650,44 @@ public class BrokerController {
         }
     }
 
+    private synchronized void registerBrokerAll2(final boolean checkOrderConfig, boolean oneway) {
+        TopicConfigSerializeWrapper topicConfigWrapper =
+                this.getTopicConfigManager().buildTopicConfigSerializeWrapper();
 
+        if (!PermName.isWriteable(this.getBrokerConfig().getBrokerPermission())
+                || !PermName.isReadable(this.getBrokerConfig().getBrokerPermission())) {
+            ConcurrentHashMap<String, TopicConfig> topicConfigTable =
+                    new ConcurrentHashMap<String, TopicConfig>(topicConfigWrapper.getTopicConfigTable());
+            for (TopicConfig topicConfig : topicConfigTable.values()) {
+                topicConfig.setPerm(this.getBrokerConfig().getBrokerPermission());
+            }
+            topicConfigWrapper.setTopicConfigTable(topicConfigTable);
+        }
+
+        RegisterBrokerResult registerBrokerResult = this.brokerOuterAPI.registerBrokerAll(//
+            this.brokerConfig.getBrokerClusterName(), //
+            this.getBrokerAddr(), //
+            this.brokerConfig.getBrokerName(), //
+            this.brokerConfig.getBrokerId(), //
+            this.messageStoreConfig.getBrokerRole().ordinal(),
+            this.getHAServerAddr(), //
+            topicConfigWrapper,//
+            this.filterServerManager.buildNewFilterServerList(),//
+            oneway);
+/*
+        if (registerBrokerResult != null) {
+            if (this.updateMasterHAServerAddrPeriodically && registerBrokerResult.getHaServerAddr() != null) {
+                this.messageStore.updateHaMasterAddress(registerBrokerResult.getHaServerAddr());
+            }
+
+            this.slaveSynchronize.setMasterAddr(registerBrokerResult.getMasterAddr());
+
+            if (checkOrderConfig) {
+                this.getTopicConfigManager().updateOrderTopicConfig(registerBrokerResult.getKvTable());
+            }
+        }*/
+    }
+    
     public TopicConfigManager getTopicConfigManager() {
         return topicConfigManager;
     }

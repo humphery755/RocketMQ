@@ -30,9 +30,11 @@ import com.alibaba.rocketmq.common.protocol.RequestCode;
 import com.alibaba.rocketmq.common.protocol.ResponseCode;
 import com.alibaba.rocketmq.common.protocol.body.ConsumerOffsetSerializeWrapper;
 import com.alibaba.rocketmq.common.protocol.body.KVTable;
+import com.alibaba.rocketmq.common.protocol.body.PaxosNotificationBody;
 import com.alibaba.rocketmq.common.protocol.body.RegisterBrokerBody;
 import com.alibaba.rocketmq.common.protocol.body.SubscriptionGroupWrapper;
 import com.alibaba.rocketmq.common.protocol.body.TopicConfigSerializeWrapper;
+import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.RegisterBrokerRequestHeader;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.RegisterBrokerResponseHeader;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.UnRegisterBrokerRequestHeader;
@@ -121,6 +123,7 @@ public class BrokerOuterAPI {
             final String brokerAddr,// 2
             final String brokerName,// 3
             final long brokerId,// 4
+            final int brokerRole,//+4
             final String haServerAddr,// 5
             final TopicConfigSerializeWrapper topicConfigWrapper, // 6
             final List<String> filterServerList,// 7
@@ -179,6 +182,7 @@ public class BrokerOuterAPI {
             final String brokerAddr,// 2
             final String brokerName,// 3
             final long brokerId,// 4
+            final int brokerRole,//+4
             final String haServerAddr,// 5
             final TopicConfigSerializeWrapper topicConfigWrapper,// 6
             final List<String> filterServerList,// 7
@@ -191,7 +195,7 @@ public class BrokerOuterAPI {
             for (String namesrvAddr : nameServerAddressList) {
                 try {
                     RegisterBrokerResult result =
-                            this.registerBroker(namesrvAddr, clusterName, brokerAddr, brokerName, brokerId,
+                            this.registerBroker(namesrvAddr, clusterName, brokerAddr, brokerName, brokerId,brokerRole,
                                 haServerAddr, topicConfigWrapper, filterServerList, oneway);
                     if (result != null) {
                         registerBrokerResult = result;
@@ -345,6 +349,34 @@ public class BrokerOuterAPI {
         switch (response.getCode()) {
         case ResponseCode.SUCCESS: {
             return SubscriptionGroupWrapper.decode(response.getBody(), SubscriptionGroupWrapper.class);
+        }
+        default:
+            break;
+        }
+
+        throw new MQBrokerException(response.getCode(), response.getRemark());
+    }
+    
+    /**
+     * 获取所有定时进度
+     * 
+     * @param addr
+     * @return
+     */
+    public long getLeader(final String addr) throws InterruptedException, RemotingTimeoutException,
+            RemotingSendRequestException, RemotingConnectException, MQBrokerException {
+        PaxosRequestHeader req = new PaxosRequestHeader();
+		req.setCode(PaxosRequestHeader.PAXOS_GET_LEADER_NODE);
+		RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, req);
+		
+        RemotingCommand response = this.remotingClient.invokeSync(addr, request, 3000);
+        response.getBody();
+        
+        assert response != null;
+        switch (response.getCode()) {
+        case ResponseCode.SUCCESS: {
+        	PaxosNotificationBody leaderElectionBody = PaxosNotificationBody.decode(response.getBody(),PaxosNotificationBody.class);
+            return leaderElectionBody.getLeader();
         }
         default:
             break;

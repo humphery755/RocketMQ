@@ -22,6 +22,7 @@ package com.alibaba.rocketmq.store.config;
  * @since 2013-7-21
  */
 public enum BrokerRole {
+	UNINITIALIZED,
     // 异步复制Master
     ASYNC_MASTER,
     // 同步双写Master

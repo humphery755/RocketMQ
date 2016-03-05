@@ -157,7 +157,7 @@ public class NettyUDPServer extends NettyRemotingAbstract implements RemotingSer
 								defaultEventExecutorGroup, //
 								new UDP2BufAdapt(),
 								new NettyEncoder(), //
-								new NettyDecoder(), //
+								//
 								//new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),//
 								//new NettyConnetManageHandler(), //
 								new NettyServerHandler());
@@ -269,7 +269,7 @@ public class NettyUDPServer extends NettyRemotingAbstract implements RemotingSer
 	}
 
 	class UDP2BufAdapt extends SimpleChannelInboundHandler<DatagramPacket> {
-
+		NettyDecoder nd=new NettyDecoder();
 		   /* @Override
 		    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
 		        cause.printStackTrace();
@@ -278,10 +278,13 @@ public class NettyUDPServer extends NettyRemotingAbstract implements RemotingSer
 			@Override
 			protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket msg) throws Exception {
 				if (msg instanceof DatagramPacket) {
-					ByteBuf data=null;
+					RemotingCommand data=null;
 		            try {
 		            	DatagramPacket dp = (DatagramPacket) msg;
-		            	data = dp.content().copy();
+		            	data=(RemotingCommand)nd.decode(ctx, (ByteBuf)dp.content().copy());
+		            	data.setRemark(dp.sender()==null?null:dp.sender().toString());
+		            	//( (io.netty.channel.socket.nio.NioDatagramChannel)ctx.channel()).
+		            	//data = dp.content().copy();
 		            } catch (DecoderException e) {
 		                throw e;
 		            } catch (Throwable t) {

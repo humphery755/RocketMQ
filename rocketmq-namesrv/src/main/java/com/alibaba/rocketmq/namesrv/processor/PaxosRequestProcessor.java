@@ -15,92 +15,104 @@
  */
 package com.alibaba.rocketmq.namesrv.processor;
 
-import io.netty.channel.ChannelHandlerContext;
-
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.rocketmq.common.ThreadFactoryImpl;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.protocol.RequestCode;
 import com.alibaba.rocketmq.common.protocol.ResponseCode;
-import com.alibaba.rocketmq.common.protocol.body.LeaderElectionBody;
+import com.alibaba.rocketmq.common.protocol.body.PaxosNotificationBody;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.namesrv.PaxosController;
-import com.alibaba.rocketmq.remoting.common.RemotingHelper;
+import com.alibaba.rocketmq.namesrv.paxos.Server;
+import com.alibaba.rocketmq.namesrv.paxos.Server.State;
+import com.alibaba.rocketmq.remoting.common.RemotingUtil;
 import com.alibaba.rocketmq.remoting.exception.RemotingCommandException;
+import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
+import com.alibaba.rocketmq.remoting.exception.RemotingSendRequestException;
+import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
+import com.alibaba.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import com.alibaba.rocketmq.remoting.netty.NettyRequestProcessor;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 
+import io.netty.channel.ChannelHandlerContext;
+
 /**
  * Paxos Server网络请求处理
+ * 
  * @author humphery
  *
  */
 public class PaxosRequestProcessor implements NettyRequestProcessor {
-	private static final Logger log = LoggerFactory
-			.getLogger(LoggerName.NamesrvLoggerName);
-	/*
-	 * Maximum capacity of thread queues
-	 */
-	static final int RECV_CAPACITY = 100;
-	public final ArrayBlockingQueue<PaxosRequestHeader> recvQueue = new ArrayBlockingQueue<PaxosRequestHeader>(
-			RECV_CAPACITY);
-	// 定时线程
-    private final ScheduledExecutorService scheduledExecutorService = Executors
-        .newSingleThreadScheduledExecutor(new ThreadFactoryImpl("PaxosScheduledThread"));
+	private static final Logger log = LoggerFactory.getLogger(LoggerName.NamesrvLoggerName);
 
 	private final PaxosController paxosController;
 
 	public PaxosRequestProcessor(PaxosController paxosController) {
-		this.paxosController=paxosController;
+		this.paxosController = paxosController;
 	}
-	
-	public void initialize(){
-		
+
+	public void initialize() {
+
 	}
-	
+
 	public void start() throws Exception {
-    }
+	}
 
-
-    public void shutdown() {
-        this.scheduledExecutorService.shutdown();
-    }
+	public void shutdown() {
+	}
 
 	@Override
-	public RemotingCommand processRequest(ChannelHandlerContext ctx,
-			RemotingCommand request) throws RemotingCommandException {
+	public RemotingCommand processRequest(ChannelHandlerContext ctx, RemotingCommand request) throws RemotingCommandException {
 		final RemotingCommand response = RemotingCommand.createResponseCommand(null);
-		
-		final PaxosRequestHeader requestHeader = (PaxosRequestHeader) request
-				.decodeCommandCustomHeader(PaxosRequestHeader.class);
-		LeaderElectionBody leaderElectionBody;
+
+		final PaxosRequestHeader requestHeader = (PaxosRequestHeader) request.decodeCommandCustomHeader(PaxosRequestHeader.class);
+		PaxosNotificationBody paxosBody = null;
 		if (request.getBody() != null) {
-			leaderElectionBody = LeaderElectionBody.decode(request.getBody(),
-					LeaderElectionBody.class);
-			requestHeader.setBody(leaderElectionBody);
+			paxosBody = PaxosNotificationBody.decode(request.getBody(), PaxosNotificationBody.class);
+			requestHeader.setBody(paxosBody);
 		}
 
 		switch (requestHeader.getCode()) {
-		case RequestCode.HEART_BEAT:
-			String addr = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
-			addr = addr==null?addr:addr.split(":")[0];
-			paxosController.registerNsSrv(requestHeader.getSid(), addr);
+		case PaxosRequestHeader.PAXOS_GET_LEADER_NODE:
+			paxosBody = new PaxosNotificationBody();
+			paxosBody.setLeader(paxosController.getFastLeaderElection().getLeader());
+			response.setBody(paxosBody.encode());
 			response.setCode(ResponseCode.SUCCESS);
-			break;
-		default:
-			if(paxosController.getFastLeaderElection().putRequest(requestHeader)){
-				// response.setBody(body);
-				response.setCode(ResponseCode.SUCCESS);
-			}else{
-				response.setCode(ResponseCode.SYSTEM_BUSY);
+			return response;
+		case PaxosRequestHeader.PAXOS_PING_REQUEST_CODE: { // ping
+			Server s = paxosController.getNsServers().get(requestHeader.getSid());
+			PaxosRequestHeader req = new PaxosRequestHeader();
+			req.setSid(paxosController.getMyid());
+			req.setCode(PaxosRequestHeader.PAXOS_PONG_REQUEST_CODE);
+
+			RemotingCommand reqcmd = RemotingCommand.createRequestCommand(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, req);
+			PaxosNotificationBody body = new PaxosNotificationBody();
+			body.setAddr(RemotingUtil.getLocalAddress() + ":" + paxosController.getNettyServerConfig().getListenPort());
+			reqcmd.setBody(body.encode());
+			try {
+				paxosController.getRemotingClient().invokeOneway(s.getAddr(), reqcmd, 3000);
+			} catch (RemotingConnectException | RemotingTooMuchRequestException | RemotingTimeoutException | RemotingSendRequestException | InterruptedException e) {
+				e.printStackTrace();
 			}
+			response.setCode(ResponseCode.SUCCESS);
+			return response;
+		}
+		case PaxosRequestHeader.PAXOS_PONG_REQUEST_CODE: // pong
+			// String addr=paxosBody.getAddr();
+			Server s = paxosController.getNsServers().get(requestHeader.getSid());
+			s.setState(State.ACTIVE);
+			response.setCode(ResponseCode.SUCCESS);
+			return response;
+
+		default:
 			break;
+		}
+
+		if (paxosController.getFastLeaderElection().putRequest(requestHeader)) {
+			response.setCode(ResponseCode.SUCCESS);
+		} else {
+			response.setCode(ResponseCode.SYSTEM_BUSY);
 		}
 
 		response.setRemark(null);

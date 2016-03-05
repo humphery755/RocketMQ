@@ -18,8 +18,7 @@ public class NamesrvConfig {
     private String rocketmqHome = System.getProperty(MixAll.ROCKETMQ_HOME_PROPERTY,
         System.getenv(MixAll.ROCKETMQ_HOME_ENV));
     // 通用的KV配置持久化地址
-    private String kvConfigPath = System.getProperty("user.home") + File.separator + "namesrv"
-            + File.separator + "kvConfig.json";
+    private String kvConfigPath;
 
     private long myid;
     private String namesrvAddr;
@@ -34,6 +33,8 @@ public class NamesrvConfig {
 
 
     public String getKvConfigPath() {
+    	if(kvConfigPath==null)kvConfigPath=rocketmqHome+File.separator + "conf"
+                + File.separator + "kvConfig.json";
         return kvConfigPath;
     }
 

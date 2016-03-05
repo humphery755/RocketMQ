@@ -22,6 +22,8 @@ public class RegisterBrokerRequestHeader implements CommandCustomHeader {
     private String haServerAddr;
     @CFNotNull
     private Long brokerId;
+    @CFNotNull
+    private int brokerRole;
 
 
     @Override
@@ -77,4 +79,14 @@ public class RegisterBrokerRequestHeader implements CommandCustomHeader {
     public void setBrokerId(Long brokerId) {
         this.brokerId = brokerId;
     }
+
+
+	public int getBrokerRole() {
+		return brokerRole;
+	}
+
+
+	public void setBrokerRole(int brokerRole) {
+		this.brokerRole = brokerRole;
+	}
 }

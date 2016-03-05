@@ -1,4 +1,4 @@
-package com.alibaba.rocketmq.namesrv.processor;
+package com.alibaba.rocketmq.namesrv;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -105,7 +105,7 @@ public class UDPTest {
 		PaxosRequestHeader req = new PaxosRequestHeader();
 		req.getBody().setElectionEpoch(1);
 		req.getBody().setLeader(1);
-		req.getBody().setZxid(1);
+		req.getBody().setTxid(1);
 		req.getBody().setState(1);
 		req.setSid(1);
 

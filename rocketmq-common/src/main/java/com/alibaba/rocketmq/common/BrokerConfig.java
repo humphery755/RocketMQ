@@ -43,6 +43,7 @@ public class BrokerConfig {
     private String brokerClusterName = "DefaultCluster";
     @ImportantField
     private long brokerId = MixAll.MASTER_ID;
+    private long leaderId = MixAll.MASTER_ID;
     private int brokerPermission = PermName.PERM_READ | PermName.PERM_WRITE;
     private int defaultTopicQueueNums = 8;
     // 自动创建Topic功能是否开启（线上建议关闭）

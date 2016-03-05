@@ -27,7 +27,6 @@ import com.alibaba.rocketmq.common.ThreadFactoryImpl;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.namesrv.NamesrvConfig;
 import com.alibaba.rocketmq.namesrv.kvconfig.KVConfigManager;
-import com.alibaba.rocketmq.namesrv.paxos.FastLeaderElection;
 import com.alibaba.rocketmq.namesrv.processor.DefaultRequestProcessor;
 import com.alibaba.rocketmq.namesrv.routeinfo.BrokerHousekeepingService;
 import com.alibaba.rocketmq.namesrv.routeinfo.RouteInfoManager;
@@ -172,7 +171,17 @@ public class NamesrvController {
     }
 
 
+	public ExecutorService getRemotingExecutor() {
+		return remotingExecutor;
+	}
+
+
 	public ScheduledExecutorService getScheduledExecutorService() {
 		return scheduledExecutorService;
+	}
+
+
+	public PaxosController getPaxosController() {
+		return paxosController;
 	}
 }

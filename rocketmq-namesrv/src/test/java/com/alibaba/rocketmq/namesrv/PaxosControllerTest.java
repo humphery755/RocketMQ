@@ -56,8 +56,8 @@ public class PaxosControllerTest {
 
 		// 初始化服务控制对象
 		final NamesrvController namesrvController = new NamesrvController(namesrvConfig, nettyServerConfig);
-		controller = new PaxosController(namesrvController);
-		controller.initialize();
+		namesrvController.initialize();
+		controller = namesrvController.getPaxosController();
 
 	}
 

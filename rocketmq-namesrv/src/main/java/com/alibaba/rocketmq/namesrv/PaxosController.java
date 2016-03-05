@@ -15,11 +15,8 @@
  */
 package com.alibaba.rocketmq.namesrv;
 
-import io.netty.channel.Channel;
-
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,21 +24,14 @@ import org.slf4j.LoggerFactory;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.namesrv.NamesrvConfig;
 import com.alibaba.rocketmq.common.protocol.RequestCode;
-import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.namesrv.paxos.FastLeaderElection;
+import com.alibaba.rocketmq.namesrv.paxos.Server;
 import com.alibaba.rocketmq.namesrv.processor.PaxosRequestProcessor;
-import com.alibaba.rocketmq.remoting.ChannelEventListener;
 import com.alibaba.rocketmq.remoting.RemotingClient;
 import com.alibaba.rocketmq.remoting.RemotingServer;
-import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
-import com.alibaba.rocketmq.remoting.exception.RemotingSendRequestException;
-import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
-import com.alibaba.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import com.alibaba.rocketmq.remoting.netty.NettyClientConfig;
+import com.alibaba.rocketmq.remoting.netty.NettyRemotingClient;
 import com.alibaba.rocketmq.remoting.netty.NettyServerConfig;
-import com.alibaba.rocketmq.remoting.netty.NettyUDPClient;
-import com.alibaba.rocketmq.remoting.netty.NettyUDPServer;
-import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 
 /**
  * Name Server服务控制
@@ -50,112 +40,70 @@ import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
  * @since 2013-7-5
  */
 public class PaxosController {
-	private static final Logger log = LoggerFactory
-			.getLogger(LoggerName.NamesrvLoggerName);
+	private static final Logger log = LoggerFactory.getLogger(LoggerName.NamesrvLoggerName);
 
 	private final NamesrvController namesrvController;
 	private FastLeaderElection fastLeaderElection;
-	private String[] allNsAddrs;
 	private long myid;
 	// 服务端通信层对象
-    private RemotingServer remotingServer;
-	
-	private Map<Long, String> nsServers = new HashMap<Long, String>();
-	
+	private RemotingServer remotingServer;
+	private Map<Long, Server> nsServers = new HashMap<Long, Server>();
+
 	private final PaxosRequestProcessor paxosRequestProcessor;
 	private RemotingClient remotingClient;
 
 	public PaxosController(NamesrvController namesrvController) {
 		this.namesrvController = namesrvController;
 		myid = namesrvController.getNamesrvConfig().getMyid();
-		if(namesrvController.getNamesrvConfig().getNamesrvAddr()==null){
+		if (namesrvController.getNamesrvConfig().getNamesrvAddr() == null) {
 			log.error("namesrvAddr can't null!");
 			System.exit(1);
 		}
-		allNsAddrs = namesrvController.getNamesrvConfig().getNamesrvAddr().split(";");
+		String[] allNsAddrs = namesrvController.getNamesrvConfig().getNamesrvAddr().split(";");
+		long i = 0;
+		for (String addr : allNsAddrs) {
+			Server s = new Server(i++, addr);
+			nsServers.put(s.getMyid(), s);
+		}
 		paxosRequestProcessor = new PaxosRequestProcessor(this);
 		fastLeaderElection = new FastLeaderElection(this);
-		
+
 		NettyClientConfig nettyClientConfig = new NettyClientConfig();
-		remotingClient = new NettyUDPClient(nettyClientConfig);
+		remotingClient = new NettyRemotingClient(nettyClientConfig);// new
+																	// NettyUDPClient(nettyClientConfig);
 		// remotingClient.registerRPCHook(rpcHook);
+
 	}
 
 	public boolean initialize() {
-
+		this.remotingServer = namesrvController.getRemotingServer();
 		// 初始化通信层
-        this.remotingServer = new NettyUDPServer(namesrvController.getNettyServerConfig(), new ChannelEventListener(){
 
-			@Override
-			public void onChannelConnect(String remoteAddr, Channel channel) {
-			}
+		/*
+		 * new NettyUDPServer(namesrvController.getNettyServerConfig(), new
+		 * ChannelEventListener(){ public void onChannelConnect(String
+		 * remoteAddr, Channel channel) {} public void onChannelClose(String
+		 * remoteAddr, Channel channel) {} public void onChannelException(String
+		 * remoteAddr, Channel channel) {} public void onChannelIdle(String
+		 * remoteAddr, Channel channel) { } });
+		 */
 
-			@Override
-			public void onChannelClose(String remoteAddr, Channel channel) {
-			}
-
-			@Override
-			public void onChannelException(String remoteAddr, Channel channel) {
-			}
-
-			@Override
-			public void onChannelIdle(String remoteAddr, Channel channel) {
-			}
-        	
-        });
-        
-        remotingServer.registerProcessor(
-				RequestCode.PAXOS_ALGORITHM_REQUEST_CODE,
-				paxosRequestProcessor,
-				namesrvController.getScheduledExecutorService());
-
-
+		remotingServer.registerProcessor(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, paxosRequestProcessor, namesrvController.getScheduledExecutorService());
+		namesrvController.getRemotingServer().registerDefaultProcessor(paxosRequestProcessor, namesrvController.getRemotingExecutor());
 		return true;
 	}
 
-
 	public void start() throws Exception {
-		this.remotingServer.start();
+		// this.remotingServer.start();
 		remotingClient.start();
 		fastLeaderElection.start();
 		paxosRequestProcessor.start();
-		
-		this.namesrvController.getScheduledExecutorService()
-		.scheduleAtFixedRate(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					PaxosController.this.heartBeat();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			}
-		}, 1, 60, TimeUnit.SECONDS);
 	}
 
 	public void shutdown() {
-		this.remotingServer.shutdown();
+		// this.remotingServer.shutdown();
 		paxosRequestProcessor.shutdown();
 		fastLeaderElection.shutdown();
-	}
-	
-	public void registerNsSrv(Long id,String addr){
-		nsServers.put(id, addr);
-	}
-
-	private void heartBeat() throws RemotingConnectException,
-			RemotingSendRequestException, RemotingTimeoutException,
-			InterruptedException, RemotingTooMuchRequestException {
-		PaxosRequestHeader rHeader = new PaxosRequestHeader();
-		rHeader.setSid(myid);
-		rHeader.setCode(RequestCode.HEART_BEAT);
-		RemotingCommand request = RemotingCommand.createRequestCommand(
-				RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, rHeader);
-
-		for (String addr : allNsAddrs) {
-			remotingClient.invokeOneway(addr, request,3000);
-
-		}
 	}
 
 	public NamesrvConfig getNamesrvConfig() {
@@ -174,10 +122,6 @@ public class PaxosController {
 		return fastLeaderElection;
 	}
 
-	public Map<Long, String> getNsServers() {
-		return nsServers;
-	}
-
 	public RemotingClient getRemotingClient() {
 		return remotingClient;
 	}
@@ -186,8 +130,11 @@ public class PaxosController {
 		return myid;
 	}
 
-	public String[] getAllNsAddrs() {
-		return allNsAddrs;
+	public boolean isLeader() {
+		return fastLeaderElection.getLeader() == myid;
 	}
-	
+
+	public Map<Long, Server> getNsServers() {
+		return nsServers;
+	}
 }

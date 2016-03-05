@@ -13,24 +13,28 @@ import org.slf4j.LoggerFactory;
 import com.alibaba.rocketmq.common.ServiceThread;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.protocol.RequestCode;
-import com.alibaba.rocketmq.common.protocol.body.LeaderElectionBody;
+import com.alibaba.rocketmq.common.protocol.body.PaxosNotificationBody;
 import com.alibaba.rocketmq.common.protocol.header.namesrv.PaxosRequestHeader;
 import com.alibaba.rocketmq.namesrv.PaxosController;
+import com.alibaba.rocketmq.remoting.common.RemotingUtil;
 import com.alibaba.rocketmq.remoting.exception.RemotingConnectException;
 import com.alibaba.rocketmq.remoting.exception.RemotingSendRequestException;
 import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
 import com.alibaba.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
+
 /**
  *
-l 成为Leader的必要条件？
-Leader要具有最高的zxid；集群中大多数的机器（至少n/2 + 1）得到响应并follow选出的Leader。 
- 
-l 如果所有zxid都相同(例如: 刚初始化时),此时有可能不能形成n/2+1个Server，怎么办？
-zookeeper中每一个Server都有一个ID,这个ID是不重复的，如果遇到这样的情况时，zookeeper就推荐ID最大的哪个Server作为Leader。
- 
-l zookeeper中Leader怎么知道Fllower还存活，Fllower怎么知道Leader还存活？
-Leader定时向Fllower发ping消息，Fllower定时向Leader发ping消息，当发现Leader无法ping通时，就改变自己的状态(LOOKING)，发起新的一轮选举。
+ * 成为Leader的必要条件？ Leader要具有最高的txid；集群中大多数的机器（至少n/2 + 1）得到响应并follow选出的Leader。
+ * 选举采用2PC： 1 prepared - 我选我通知，并将自己状态置为LOOKING.  phase 1 － 根据选举规则提交Leader,并奖自己状态置为FLLOWER/LEADER.  phase 2 - Leader发出结果公告
+ * 
+ * 如果所有txid都相同(例如: 刚初始化时),此时有可能不能形成n/2+1个Server，怎么办？
+ * 每一个Server都有一个ID,这个ID是不重复的，如果遇到这样的情况时，
+ * 就推荐ID最大的哪个Server作为Leader。
+ * 
+ *Fllower怎么知道Leader还存活？
+ * Leader选举出来后，Fllower定时向Leader发ping消息，当发现Leader无法ping通时，就改变自己的状态(LOOKING)，发起新的一轮选举。
+ * 
  * @author humphery
  *
  */
@@ -39,13 +43,18 @@ public class FastLeaderElection {
 	final static int IGNOREVALUE = -1;
 
 	private final PaxosController paxosController;
-	//private final ArrayBlockingQueue<PaxosRequestHeader> recvQueue = new ArrayBlockingQueue<PaxosRequestHeader>(100);
 	private final WorkerReceiver workerReceiver;
 	private final WorkerSender workerSender;
+	private final LeaderCheck leaderCheck;
 	private AtomicLong logicalclock = new AtomicLong(0); /* Election instance */
 	private int state = PaxosRequestHeader.LOOKING;
 	volatile private Vote currentVote;
-	//状态的每一次改变, 都对应着一个递增的Transaction id, 该id称为zxid  创建任意节点, 或者更新任意节点的数据, 或者删除任意节点
+
+	private long leader = -1;
+	// 状态的每一次改变, 都对应着一个递增的Transaction id, 该id称为txid 创建任意节点, 或者更新任意节点的数据,
+	// 或者删除任意节点
+	private long txid;
+	private long epoch;
 
 	public enum LearnerType {
 		PARTICIPANT, OBSERVER;
@@ -60,18 +69,24 @@ public class FastLeaderElection {
 		return learnerType;
 	}
 
+	public long getLeader() {
+		return leader;
+	}
+
 	public FastLeaderElection(PaxosController paxosController) {
 		this.paxosController = paxosController;
 		workerReceiver = new WorkerReceiver();
 		workerSender = new WorkerSender();
-		
-		long zxid = paxosController.getMyid() * paxosController.getAllNsAddrs().length + logicalclock.get();
-		currentVote = new Vote(paxosController.getMyid(),zxid,0,0);
+		leaderCheck = new LeaderCheck();
+
+		long txid = paxosController.getMyid() * paxosController.getNsServers().size() + logicalclock.get();
+		updateProposal(paxosController.getMyid(), txid, 0l);
 	}
-	
+
 	public void start() throws Exception {
 		workerReceiver.start();
 		workerSender.start();
+		leaderCheck.start();
 		startLeaderElection();
 	}
 
@@ -81,45 +96,38 @@ public class FastLeaderElection {
 	}
 
 	public boolean putRequest(final PaxosRequestHeader request) {
-		Notification n = new Notification();
-		n.sid = request.getSid();
-		n.electionEpoch = request.getBody().getElectionEpoch();
-		n.leader = request.getBody().getLeader();
-		n.state = request.getBody().getState();
-		workerReceiver.putRequest(n);
+		workerReceiver.putRequest(request);
 		return true;
 	}
 
-	synchronized public void startLeaderElection() throws RemotingConnectException, RemotingTooMuchRequestException, RemotingTimeoutException,
-			RemotingSendRequestException, InterruptedException {
-		synchronized (this) {
-			logicalclock.incrementAndGet();
-		}
-		long zxid = paxosController.getMyid() * paxosController.getAllNsAddrs().length + currentVote.getElectionEpoch();
-		currentVote = new Vote(paxosController.getMyid(),zxid, logicalclock.get(), logicalclock.get());		 
+	synchronized public void startLeaderElection() {
+		logicalclock.incrementAndGet();
+		long txid = paxosController.getMyid() * paxosController.getNsServers().size() + logicalclock.get();
+		LOG.debug("id: " + paxosController.getMyid()  + ", epoch: " + logicalclock.get() + ", peer epoch: " + logicalclock.get() + ", txid: " + txid);
+		updateProposal(paxosController.getMyid(), txid, logicalclock.get());
 		sendNotifications();
 	}
-	
-	protected boolean totalOrderPredicate1(long newId, long newZxid, long newEpoch, long curId, long curZxid, long curEpoch) {
-		LOG.debug("id: " + newId + ", proposed id: " + curId + ", zxid: 0x" + Long.toHexString(newZxid) + ", proposed zxid: 0x"
-				+ Long.toHexString(curZxid));
-		return ((newEpoch == curEpoch) && ((newZxid < curZxid))&& ((newId < curId)));
+
+	protected boolean totalOrderPredicate1(long newId, long newtxid, long newEpoch, long curId, long curtxid, long curEpoch) {
+		LOG.debug("id: " + newId + ", proposed id: " + curId + ", txid: 0x" + Long.toHexString(newtxid) + ", proposed txid: 0x" + Long.toHexString(curtxid));
+		return ((newEpoch == curEpoch) && ((newtxid < curtxid)) && ((newId < curId)));
 	}
+
 	class WorkerReceiver extends ServiceThread {
-		private final ArrayBlockingQueue<Notification> recvQueue = new ArrayBlockingQueue<Notification>(100);
+		private final ArrayBlockingQueue<PaxosRequestHeader> recvQueue = new ArrayBlockingQueue<PaxosRequestHeader>(100);
 
 		// 投票箱
 		HashMap<Long, Vote> recvset = new HashMap<Long, Vote>();
 		HashMap<Long, Vote> outofelection = new HashMap<Long, Vote>();
-		
+
 		WorkerReceiver() {
 		}
-		
+
 		public void putOutofelection(Vote v) {
 			outofelection.put(v.getId(), v);
 		}
 
-		public void putRequest(final Notification request) {
+		public void putRequest(final PaxosRequestHeader request) {
 			recvQueue.offer(request);
 			synchronized (this) {
 				if (!this.hasNotified) {
@@ -145,118 +153,189 @@ public class FastLeaderElection {
 		}
 
 		private boolean process() throws InterruptedException {
-			Notification n = recvQueue.poll(3000, TimeUnit.MILLISECONDS);
+			PaxosRequestHeader n = recvQueue.poll(3000, TimeUnit.MILLISECONDS);
 			if (n == null)
 				return false;
-
-			switch (n.state) {
-			case PaxosRequestHeader.LOOKING:
-				// If notification > current, replace and send messages
-				// out
-				long xid=n.zxid;
-				if (n.electionEpoch > logicalclock.get()) {
-					logicalclock.set(n.electionEpoch);
+			PaxosNotificationBody nb = n.getBody();
+			if(nb.getState()==PaxosRequestHeader.RESET){
+				if(nb.getElectionEpoch()<= logicalclock.get() && (FastLeaderElection.this.state==PaxosRequestHeader.FOLLOWING ||FastLeaderElection.this.state==PaxosRequestHeader.LEADING)){
+					FastLeaderElection.this.leader = -1;
+					FastLeaderElection.this.txid = -1;
+					FastLeaderElection.this.epoch = -1;
+					FastLeaderElection.this.state = PaxosRequestHeader.LOOKING;
 					recvset.clear();
-					if (totalOrderPredicate(n.leader, n.zxid, n.electionEpoch, paxosController.getMyid(), currentVote.getZxid(), currentVote.getElectionEpoch())) {
-						updateProposal(n.leader, n.zxid, n.electionEpoch);
-					} else {
-						updateProposal(paxosController.getMyid(), currentVote.getZxid(), currentVote.getElectionEpoch());
+					outofelection.clear();
+					startLeaderElection();
+				}
+				return true;
+			}
+			switch (state) {
+			case PaxosRequestHeader.LOOKING:
+				switch (nb.getState()) {
+				case PaxosRequestHeader.LOOKING:
+
+					// If notification > current, replace and send messages out
+					if (nb.getElectionEpoch() > logicalclock.get()) {
+						logicalclock.set(nb.getElectionEpoch());
+						recvset.clear();
+						if (totalOrderPredicate(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), paxosController.getMyid(), currentVote.getTxid(), currentVote.getElectionEpoch())) {
+							updateProposal(nb.getLeader(), nb.getTxid(), nb.getPeerEpoch());
+						} else {
+							updateProposal(paxosController.getMyid(), currentVote.getTxid(), currentVote.getPeerEpoch());
+						}
+						sendNotifications();
+					} else if (nb.getElectionEpoch() < logicalclock.get()) {
+						if (LOG.isDebugEnabled()) {
+							LOG.debug("Notification election epoch is smaller than logicalclock. n.electionEpoch = 0x" + Long.toHexString(nb.getElectionEpoch()) + ", logicalclock=0x"
+									+ Long.toHexString(logicalclock.get()));
+						}
+						sendNotification(n.getSid());
+						break;
+					} else if (totalOrderPredicate(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), currentVote.getId(), currentVote.getTxid(), currentVote.getElectionEpoch())) {
+						updateProposal(nb.getLeader(), nb.getTxid(), nb.getPeerEpoch());
+						sendNotifications();
+					}else if (currentVote.getTxid()>nb.getTxid()){
+						sendNotifications();
 					}
-					sendNotifications();
-				} else if (n.electionEpoch < logicalclock.get()) {
-					if (LOG.isDebugEnabled()) {
-						LOG.debug("Notification election epoch is smaller than logicalclock. n.electionEpoch = 0x"
-								+ Long.toHexString(n.electionEpoch) + ", logicalclock=0x" + Long.toHexString(logicalclock.get()));
+					recvset.put(n.getSid(), new Vote(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), nb.getPeerEpoch()));
+
+					if (termPredicate(recvset, new Vote(currentVote.getId(), currentVote.getTxid(), logicalclock.get(), currentVote.getPeerEpoch()))) {
+
+						// Verify if there is any change in the proposed
+						// leader
+						while ((n = recvQueue.poll(3000, TimeUnit.MILLISECONDS)) != null) {
+							if (totalOrderPredicate(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), currentVote.getId(), currentVote.getTxid(), currentVote.getElectionEpoch())) {
+								recvQueue.put(n);
+								break;
+							}
+						}
+
+						/*
+						 * This predicate is true once we don't read any new
+						 * relevant message from the reception queue
+						 */
+						if (n == null) {
+							state = (currentVote.getId() == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState();
+							currentVote = new Vote(currentVote.getId(), currentVote.getTxid(), currentVote.getElectionEpoch(), currentVote.getPeerEpoch(), state);
+							recvQueue.clear();
+							recvQueue.add(buildNotification());
+							sendNotifications();
+							break;// endVote;
+						}
 					}
 					break;
-				} else if (totalOrderPredicate(n.leader, n.zxid, n.electionEpoch, currentVote.getId(), currentVote.getZxid(), currentVote.getElectionEpoch())) {
-					updateProposal(n.leader, n.zxid, n.electionEpoch);
-					sendNotifications();
-				} else if(totalOrderPredicate1(n.leader, n.zxid, n.electionEpoch, currentVote.getId(), currentVote.getZxid(), currentVote.getElectionEpoch())) {
-					xid=currentVote.getZxid();
+				case PaxosRequestHeader.OBSERVING:
+					LOG.debug("Notification from observer: " + n.getSid());
+					break;
+				case PaxosRequestHeader.FOLLOWING:
+					LOG.debug("Notification from following: " + n.getSid());
+					break;
+				case PaxosRequestHeader.LEADING:
+					if (nb.getElectionEpoch() > logicalclock.get() && n.getSid()==nb.getLeader()) {// leader already exists.
+						logicalclock.set(nb.getElectionEpoch());
+						recvset.clear();
+						currentVote = new Vote(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), nb.getPeerEpoch(), PaxosRequestHeader.FOLLOWING);
+						leaderCheck.putRequest(nb);
+						break;
+					} 
+					/*
+					 * Consider all notifications from the same epoch together.
+					 */
+
+					if (nb.getElectionEpoch() == logicalclock.get()) {
+						Vote vote = new Vote(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), nb.getPeerEpoch(), nb.getState());
+						recvset.put(n.getSid(), vote);
+						if (termPredicate(recvset, vote) && checkLeader(outofelection, nb.getLeader(), nb.getElectionEpoch())) {
+							state = (nb.getLeader() == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState();
+							currentVote = new Vote(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), nb.getPeerEpoch(), state);
+							recvQueue.clear();
+							sendNotifications();
+							break;// endVote;
+						}
+					}
+					
+					outofelection.put(n.getSid(), new Vote(nb.getLeader(), IGNOREVALUE, IGNOREVALUE, nb.getPeerEpoch(), nb.getState()));
+					if (termPredicate(outofelection, new Vote(nb.getLeader(), IGNOREVALUE, IGNOREVALUE, nb.getPeerEpoch(), nb.getState())) && checkLeader(outofelection, nb.getLeader(), IGNOREVALUE)) {
+						synchronized (this) {
+							logicalclock.set(nb.getElectionEpoch());
+							state = ((nb.getLeader() == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState());
+						}
+						currentVote = new Vote(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), nb.getPeerEpoch(), state);
+						recvQueue.clear();
+						sendNotifications();
+						break;// endVote;
+					}
+					break;
+				default:
+					LOG.warn("Notification state unrecoginized: " + nb.getState() + " (n.state), " + n.getSid() + " (n.sid)");
+					break;
 				}
-
-				recvset.put(n.sid, new Vote(n.leader, xid, n.electionEpoch, n.electionEpoch));
-
-				if (termPredicate(recvset, new Vote(currentVote.getId(), currentVote.getZxid(), logicalclock.get(), currentVote.getElectionEpoch()))) {
-
-					// Verify if there is any change in the proposed
-					// leader
-					while ((n = recvQueue.poll(3000, TimeUnit.MILLISECONDS)) != null) {
-						if (totalOrderPredicate(n.leader, n.zxid, n.electionEpoch, currentVote.getId(), currentVote.getZxid(), currentVote.getElectionEpoch())) {
-							recvQueue.put(n);
+				break;
+			case PaxosRequestHeader.OBSERVING:
+				LOG.debug("Notification from observer: " + n.getSid());
+				break;
+			case PaxosRequestHeader.FOLLOWING:
+			case PaxosRequestHeader.LEADING:
+				if (leader != -1) {
+					if (n.getSid() != paxosController.getMyid() && leader==paxosController.getMyid()) {
+						sendNotification(n.getSid());
+					}
+					break;
+				}
+				switch (nb.getState()) {
+				case PaxosRequestHeader.LOOKING:
+					sendNotifications();
+					break;
+				case PaxosRequestHeader.OBSERVING:
+					LOG.debug("Notification from observer: " + n.getSid());
+					break;
+				case PaxosRequestHeader.FOLLOWING:
+				case PaxosRequestHeader.LEADING:
+					/*
+					 * Consider all notifications from the same epoch together.
+					 */
+					
+					if (nb.getElectionEpoch() == logicalclock.get()) {
+						Vote vote = new Vote(nb.getLeader(), nb.getTxid(), nb.getElectionEpoch(), nb.getPeerEpoch(), nb.getState());
+						recvset.put(n.getSid(), vote);
+						if (termPredicate(recvset, vote) && checkLeader(outofelection, nb.getLeader(), nb.getElectionEpoch())) {
+							state = (nb.getLeader() == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState();
+							recvQueue.clear();
+							outofelection.clear();
+							recvset.clear();
+							// leader确定，更新epoch,重新计算txid，并公布结果
+							FastLeaderElection.this.logicalclock.incrementAndGet();
+							FastLeaderElection.this.txid = paxosController.getMyid() * paxosController.getNsServers().size() + logicalclock.get();
+							FastLeaderElection.this.currentVote = new Vote(nb.getLeader(), txid, logicalclock.get(), logicalclock.get(), state);
+							FastLeaderElection.this.leader = nb.getLeader();
+							FastLeaderElection.this.epoch = currentVote.getElectionEpoch();
+							LOG.info("Leader Election success, leader is {}", leader);
+							sendNotifications();
 							break;
 						}
 					}
 
-					/*
-					 * This predicate is true once we don't read any new
-					 * relevant message from the reception queue
-					 */
-					if (n == null) {
-						state = (currentVote.getId() == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState();
-						Vote endVote = new Vote(currentVote.getId(), currentVote.getZxid(), currentVote.getElectionEpoch(),currentVote.getElectionEpoch(),state);
-						currentVote=endVote;
-						recvQueue.clear();
-						sendNotifications();
-						return true;// endVote;
+					outofelection.put(n.getSid(), new Vote(nb.getLeader(), IGNOREVALUE, IGNOREVALUE, nb.getPeerEpoch(), nb.getState()));
+					//termPredicate(outofelection, new Vote(nb.getLeader(), IGNOREVALUE, IGNOREVALUE, nb.getPeerEpoch(), nb.getState())
+					if (nb.getElectionEpoch() > logicalclock.get() && checkLeader(outofelection, nb.getLeader(), IGNOREVALUE)) {
+							FastLeaderElection.this.logicalclock.set(nb.getElectionEpoch());
+							FastLeaderElection.this.state = ((nb.getLeader() == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState());
+							recvQueue.clear();
+							outofelection.clear();
+							recvset.clear();
+							leaderCheck.putRequest(nb);
+						break;// endVote;
 					}
-				}
-				break;
-			case PaxosRequestHeader.OBSERVING:
-				LOG.debug("Notification from observer: " + n.sid);
-				break;
-			case PaxosRequestHeader.FOLLOWING:
-			case PaxosRequestHeader.LEADING:
-				/*
-				 * Consider all notifications from the same epoch together.
-				 */
-				if (n.electionEpoch == logicalclock.get()) {
-					Vote vote = new Vote(n.leader, n.zxid, n.electionEpoch, n.electionEpoch, n.state);
-					recvset.put(n.sid, vote);
-					if (termPredicate(recvset, vote) && checkLeader(outofelection, n.leader, n.electionEpoch)) {
-						state = (n.leader == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState();
-
-						Vote endVote = new Vote(n.leader, n.zxid, n.peerEpoch, n.peerEpoch,state);
-						currentVote=endVote;
-						recvQueue.clear();
-						//sendNotifications();
-						return true;// endVote;
-					}
-				}
-
-				/*
-				 * Before joining an established ensemble, verify that a
-				 * majority are following the same leader. Only peer epoch is
-				 * used to check that the votes come from the same ensemble.
-				 * This is because there is at least one corner case in which
-				 * the ensemble can be created with inconsistent zxid and
-				 * election epoch info. However, given that only one ensemble
-				 * can be running at a single point in time and that each epoch
-				 * is used only once, using only the epoch to compare the votes
-				 * is sufficient.
-				 * 
-				 * @see https://issues.apache.org/jira/browse/ZOOKEEPER-1732
-				 */
-				outofelection.put(n.sid, new Vote(n.leader, IGNOREVALUE, IGNOREVALUE, n.peerEpoch, n.state));
-				if (termPredicate(outofelection, new Vote(n.leader, IGNOREVALUE, IGNOREVALUE, n.peerEpoch, n.state))
-						&& checkLeader(outofelection, n.leader, IGNOREVALUE)) {
-					synchronized (this) {
-						logicalclock.set(n.electionEpoch);
-						state = ((n.leader == paxosController.getMyid()) ? PaxosRequestHeader.LEADING : learningState());
-					}
-					Vote endVote = new Vote(n.leader, n.zxid, n.peerEpoch, n.peerEpoch,state);
-					recvQueue.clear();
-					currentVote=endVote;
-					//sendNotifications();
-					return true;// endVote;
+					break;
+				default:
+					LOG.warn("Notification state unrecoginized: " + nb.getState() + " (n.state), " + n.getSid() + " (n.sid)");
+					break;
 				}
 				break;
 			default:
-				LOG.warn("Notification state unrecoginized: " + n.state + " (n.state), " + n.sid + " (n.sid)");
+				LOG.warn("Notification state unrecoginized: " + nb.getState() + " (n.state), " + n.getSid() + " (n.sid)");
 				break;
 			}
-
 			return true;
 		}
 
@@ -322,12 +401,7 @@ public class FastLeaderElection {
 	 *            Identifier of the vote received last
 	 */
 	private boolean termPredicate(HashMap<Long, Vote> votes, Vote vote) {
-
-		/*
-		 * First make the views consistent. Sometimes peers will have different
-		 * zxids for a server depending on timing.
-		 */
-		int maxCount = paxosController.getAllNsAddrs().length/2+1;
+		int maxCount = paxosController.getNsServers().size() / 2 + 1;
 		int count = 0;
 		for (Map.Entry<Long, Vote> entry : votes.entrySet()) {
 			if (vote.equals(entry.getValue())) {
@@ -338,63 +412,47 @@ public class FastLeaderElection {
 		return count >= maxCount;
 	}
 
-	private void updateProposal(long leader, long zxid, long epoch) {
-		currentVote = new Vote( leader,  zxid,  epoch,epoch);
+	private void updateProposal(long leader, long txid, long epoch) {
+		currentVote = new Vote(leader, txid, epoch, epoch);
+		workerReceiver.recvset.put(paxosController.getMyid(), currentVote);
 	}
 
 	/**
-	 * Check if a pair (server id, zxid) succeeds our current vote.
+	 * Check if a pair (server id, txid) succeeds our current vote.
 	 * 
 	 * @param id
 	 *            Server identifier
-	 * @param zxid
-	 *            Last zxid observed by the issuer of this vote
+	 * @param txid
+	 *            Last txid observed by the issuer of this vote
 	 */
-	protected boolean totalOrderPredicate(long newId, long newZxid, long newEpoch, long curId, long curZxid, long curEpoch) {
-		LOG.debug("id: " + newId + ", proposed id: " + curId + ", zxid: 0x" + Long.toHexString(newZxid) + ", proposed zxid: 0x"
-				+ Long.toHexString(curZxid));
-		/*
-		 * if(self.getQuorumVerifier().getWeight(newId) == 0){ return false; }
-		 */
+	protected boolean totalOrderPredicate(long newId, long newtxid, long newEpoch, long curId, long curtxid, long curEpoch) {
+		LOG.debug("id: " + newId + ", proposed id: " + curId + ", txid: 0x" + Long.toHexString(newtxid) + ", proposed txid: 0x" + Long.toHexString(curtxid));
+		return ((newEpoch > curEpoch) || ((newEpoch == curEpoch) && ((newtxid > curtxid) || ((newtxid == curtxid) && (newId > curId)))));
+	}
 
-		/*
-		 * We return true if one of the following three cases hold: 1- New epoch
-		 * is higher 2- New epoch is the same as current epoch, but new zxid is
-		 * higher 3- New epoch is the same as current epoch, new zxid is the
-		 * same as current zxid, but server id is higher.
-		 */
-
-		return ((newEpoch > curEpoch) || ((newEpoch == curEpoch) && ((newZxid > curZxid) || ((newZxid == curZxid) && (newId > curId)))));
+	private PaxosRequestHeader buildNotification() {
+		PaxosRequestHeader req = new PaxosRequestHeader();
+		req.setBody(new PaxosNotificationBody());
+		req.getBody().setElectionEpoch(currentVote.getElectionEpoch());
+		req.getBody().setPeerEpoch(currentVote.getPeerEpoch());
+		req.getBody().setLeader(currentVote.getId());
+		req.getBody().setTxid(currentVote.getTxid());
+		req.getBody().setState(currentVote.getState());
+		req.setSid(paxosController.getMyid());
+		return req;
 	}
 
 	private void sendNotifications() {
-		PaxosRequestHeader req = new PaxosRequestHeader();
-		req.setBody(new LeaderElectionBody());
-		req.getBody().setElectionEpoch(currentVote.getPeerEpoch());
-		req.getBody().setLeader(currentVote.getId());
-		req.getBody().setZxid(currentVote.getZxid());
-		req.getBody().setState(currentVote.getState());
-		req.setSid(paxosController.getMyid());
-
-		RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, req);
-		if (req.getBody() != null) {
-			request.setBody(req.getBody().encode());
-		}
-		//workerReceiver.putOutofelection(currentVote);
-		workerSender.putRequest(request);
-		/*
-		 * for (long sid : nsServers.keySet()) { QuorumVerifier qv =
-		 * self.getQuorumVerifier(); ToSend notmsg = new
-		 * ToSend(ToSend.mType.notification, proposedLeader, proposedZxid,
-		 * logicalclock.get(), QuorumPeer.ServerState.LOOKING, sid,
-		 * proposedEpoch, qv.toString().getBytes()); if(LOG.isDebugEnabled()){
-		 * LOG.debug("Sending Notification: " + proposedLeader +
-		 * " (n.leader), 0x" + Long.toHexString(proposedZxid) + " (n.zxid), 0x"
-		 * + Long.toHexString(logicalclock.get()) + " (n.round), " + sid +
-		 * " (recipient), " + self.getId() + " (paxosController.getMyid()), 0x"
-		 * + Long.toHexString(proposedEpoch) + " (n.peerEpoch)"); }
-		 * sendqueue.offer(currentVote); }
-		 */
+		PaxosRequestHeader req = buildNotification();
+		// workerReceiver.putOutofelection(currentVote);
+		workerSender.putRequest(req);
+	}
+	private void sendNotification(long sid) {
+		PaxosRequestHeader req = buildNotification();
+		Server s = paxosController.getNsServers().get(sid);
+		// workerReceiver.putOutofelection(currentVote);
+		req.getBody().setAddr(s.getAddr());
+		workerSender.putRequest(req);
 	}
 
 	/**
@@ -403,12 +461,15 @@ public class FastLeaderElection {
 	 */
 
 	class WorkerSender extends ServiceThread {
-		private LinkedBlockingQueue<RemotingCommand> sendqueue = new LinkedBlockingQueue<RemotingCommand>();
+		private LinkedBlockingQueue<PaxosRequestHeader> sendqueue = new LinkedBlockingQueue<PaxosRequestHeader>();
+		private FailSendQueue failSendQueue = new FailSendQueue();
 
-		WorkerSender() {
+		public void start() {
+			failSendQueue.start();
+			super.start();
 		}
-		
-		public void putRequest(final RemotingCommand request) {
+
+		public void putRequest(final PaxosRequestHeader request) {
 			sendqueue.offer(request);
 			synchronized (this) {
 				if (!this.hasNotified) {
@@ -442,15 +503,36 @@ public class FastLeaderElection {
 		 * @throws RemotingTimeoutException
 		 * @throws RemotingSendRequestException
 		 * @throws RemotingConnectException
-		 * @throws RemotingTooMuchRequestException 
+		 * @throws RemotingTooMuchRequestException
 		 */
-		boolean process() throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException,
-				InterruptedException, RemotingTooMuchRequestException {
-			RemotingCommand m = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
-			if (m == null)
+		boolean process() throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException, InterruptedException, RemotingTooMuchRequestException {
+			PaxosRequestHeader req = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
+			if (req == null)
 				return false;
-			for (String addr : paxosController.getAllNsAddrs()) {
-				paxosController.getRemotingClient().invokeOneway(addr, m, 3000);
+			String addr=req.getBody().getAddr();
+			req.getBody().setAddr(null);
+			RemotingCommand m = RemotingCommand.createRequestCommand(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, req);
+			m.setBody(req.getBody().encode());
+			if(addr!=null){
+				try {
+					paxosController.getRemotingClient().invokeOneway(addr, m, 3000);
+					failSendQueue.remove(m, addr);
+				} catch (Exception e) {
+					LOG.error(this.getServiceName() + " service has exception {}. ", e.getMessage());
+					// failSendQueue.putRequest(m, s.getAddr());
+				}
+			}else{
+				for (Server s : paxosController.getNsServers().values()) {
+					if (s.getMyid() == paxosController.getMyid())
+						continue;
+					try {
+						paxosController.getRemotingClient().invokeOneway(s.getAddr(), m, 3000);
+						failSendQueue.remove(m, s.getAddr());
+					} catch (Exception e) {
+						LOG.error(this.getServiceName() + " service has exception {}. ", e.getMessage());
+						// failSendQueue.putRequest(m, s.getAddr());
+					}
+				}
 			}
 			return true;
 		}
@@ -461,43 +543,160 @@ public class FastLeaderElection {
 		}
 	}
 
-	static public class Notification {
-		/*
-		 * Format version, introduced in 3.4.6
-		 */
+	// 选举消息（最后一次消息）失败重试
+	class FailSendQueue extends ServiceThread {
+		private final Map<String, Object[]> failMap = new HashMap();
 
-		public final static int CURRENTVERSION = 0x2;
-		int version;
+		public void putRequest(RemotingCommand req, String addr) {
+			PaxosRequestHeader h = (PaxosRequestHeader) req.readCustomHeader();
+			synchronized (this) {
+				failMap.put(addr + "-" + h.getSid(), new Object[] { addr, req, System.currentTimeMillis() });
+			}
+		}
 
-		/*
-		 * Proposed leader
-		 */
-		long leader;
+		public void remove(RemotingCommand req, String addr) {
+			PaxosRequestHeader h = (PaxosRequestHeader) req.readCustomHeader();
+			synchronized (this) {
+				failMap.remove(addr + "-" + h.getSid());
+			}
+		}
 
-		/*
-		 * zxid of the proposed leader
-		 */
-		long zxid;
+		public void run() {
+			LOG.info(this.getServiceName() + " service started");
 
-		/*
-		 * Epoch
-		 */
-		long electionEpoch;
+			while ((!isStoped())) {
+				try {
+					this.process();
+					this.waitForRunning(10);
+				} catch (Exception e) {
+					LOG.error(this.getServiceName() + " service has exception. ", e);
+				}
+			}
 
-		/*
-		 * current state of sender
-		 */
-		int state;
+			LOG.info(this.getServiceName() + " service end");
+		}
 
-		/*
-		 * Address of sender
-		 */
-		long sid;
-		
-		//被推荐的leader的epoch
-		/*
-		 * epoch of the proposed leader
-		 */
-		long peerEpoch;
+		boolean process() throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException, InterruptedException, RemotingTooMuchRequestException {
+			Map<String, Object[]> swapFailMap = new HashMap();
+			swapFailMap.putAll(failMap);
+
+			for (Map.Entry<String, Object[]> obj : swapFailMap.entrySet()) {
+				String addr = (String) obj.getValue()[0];
+				RemotingCommand m = (RemotingCommand) obj.getValue()[1];
+				Long time = (Long) obj.getValue()[2];
+				if (System.currentTimeMillis() - time < 60000)
+					continue;
+				PaxosRequestHeader h = (PaxosRequestHeader) m.readCustomHeader();
+				try {
+					paxosController.getRemotingClient().invokeOneway(addr, m, 3000);
+					remove(m, addr);
+				} catch (Exception e) {
+					LOG.error(this.getServiceName() + " service has exception. {}", e.getMessage());
+					remove(m, addr);
+					putRequest(m, addr);
+				}
+			}
+
+			return true;
+		}
+
+		@Override
+		public String getServiceName() {
+			return FailSendQueue.class.getSimpleName();
+		}
 	}
+
+	/**
+	 * 检测leader节点状态，失败则发起重新选举
+	 * 
+	 * @author humphery
+	 *
+	 */
+	class LeaderCheck extends ServiceThread {
+		private long leader = -1;
+		private long epoch=-1;
+		final RemotingCommand request;
+		long interval = 0;
+		int retrys = -1;
+
+		public LeaderCheck() {
+			PaxosRequestHeader rHeader = new PaxosRequestHeader();
+			rHeader.setSid(paxosController.getMyid());
+			rHeader.setCode(PaxosRequestHeader.PAXOS_PING_REQUEST_CODE);
+			request = RemotingCommand.createRequestCommand(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, rHeader);
+			PaxosNotificationBody body = new PaxosNotificationBody();
+			body.setAddr(RemotingUtil.getLocalAddress() + ":" + paxosController.getNettyServerConfig().getListenPort());
+			request.setBody(body.encode());
+		}
+
+		public void putRequest(PaxosNotificationBody nb) {
+			synchronized (this) {
+				FastLeaderElection.this.leader = this.leader = nb.getLeader();
+				FastLeaderElection.this.txid = nb.getTxid();
+				FastLeaderElection.this.epoch = epoch = nb.getElectionEpoch();
+				FastLeaderElection.this.state=PaxosRequestHeader.FOLLOWING;
+				interval = 30 * 1000;
+				retrys = 3;
+				if (!this.hasNotified) {
+					this.hasNotified = true;
+					this.notify();
+				}
+			}
+		}
+
+		public void remove() {
+			this.leader = -1;
+			this.epoch=-1;
+			this.interval = 0;
+		}
+
+		public void run() {
+			LOG.info(this.getServiceName() + " service started");
+
+			while ((!isStoped())) {
+				try {
+					this.process();
+					this.waitForRunning(interval);
+				} catch (Exception e) {
+					LOG.error(this.getServiceName() + " service has exception. ", e.getMessage());
+					reset();
+				}
+			}
+
+			LOG.info(this.getServiceName() + " service end");
+		}
+
+		private void reset() {
+			retrys--;
+			if (retrys <= 0) {
+				synchronized (this) {
+					if(this.leader==-1)return;
+					PaxosRequestHeader req = new PaxosRequestHeader();
+					req.setBody(new PaxosNotificationBody());
+					req.getBody().setState(PaxosRequestHeader.RESET);
+					req.getBody().setElectionEpoch(epoch);
+					req.setSid(paxosController.getMyid());
+					remove();
+					workerReceiver.putRequest(req);
+				}
+			}
+		}
+
+		boolean process() throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException, InterruptedException, RemotingTooMuchRequestException {
+			Server s = paxosController.getNsServers().get(leader);
+			if (s == null) {
+				return false;
+			}
+
+			paxosController.getRemotingClient().invokeOneway(s.getAddr(), request, 3000);
+
+			return true;
+		}
+
+		@Override
+		public String getServiceName() {
+			return LeaderCheck.class.getSimpleName();
+		}
+	}
+
 }

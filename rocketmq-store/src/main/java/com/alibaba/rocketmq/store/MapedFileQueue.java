@@ -493,6 +493,46 @@ public class MapedFileQueue {
 
         return null;
     }
+    
+    public MapedFile findMapedFileByOffsetV1(final long offset, final boolean returnFirstOnNotFound) {
+        try {
+            this.readWriteLock.readLock().lock();
+            MapedFile mapedFile = this.getFirstMapedFile();
+
+            if (mapedFile != null) {
+                int index =
+                        (int) ((offset / this.mapedFileSize) - (mapedFile.getFileFromOffset() / this.mapedFileSize));
+                if (offset>0 &&(index < 0 || index >= this.mapedFiles.size())) {
+                    logError
+                        .warn(
+                            "findMapedFileByOffset offset not matched, request Offset: {}, index: {}, mapedFileSize: {}, mapedFiles count: {}, fileFromOffset: {}, filePath: {}, StackTrace: {}",//
+                            offset,//
+                            index,//
+                            this.mapedFileSize,//
+                            this.mapedFiles.size(),//
+                            mapedFile.getFileFromOffset(),storePath,
+                            UtilAll.currentStackTrace());
+                }
+
+                try {
+                    return this.mapedFiles.get(index);
+                }
+                catch (Exception e) {
+                    if (returnFirstOnNotFound && index<0) {
+                        return mapedFile;
+                    }
+                }
+            }
+        }
+        catch (Exception e) {
+            log.error("findMapedFileByOffset Exception", e);
+        }
+        finally {
+            this.readWriteLock.readLock().unlock();
+        }
+
+        return null;
+    }
 
 
     private MapedFile getFirstMapedFile() {

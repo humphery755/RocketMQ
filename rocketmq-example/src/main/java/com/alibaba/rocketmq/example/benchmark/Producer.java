@@ -20,6 +20,7 @@ import java.util.LinkedList;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.alibaba.rocketmq.client.exception.MQBrokerException;
 import com.alibaba.rocketmq.client.exception.MQClientException;
 import com.alibaba.rocketmq.client.producer.DefaultMQProducer;
+import com.alibaba.rocketmq.client.producer.SendResult;
 import com.alibaba.rocketmq.common.message.Message;
 import com.alibaba.rocketmq.remoting.exception.RemotingException;
 
@@ -79,12 +81,13 @@ public class Producer {
                     final double averageRT = ((end[5] - begin[5]) / (double) (end[3] - begin[3]));
 
                     System.out.printf(
-                        "Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d\n"//
+                        "Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d RT Level: %s\n"//
                         , sendTps//
                         , statsBenchmark.getSendMessageMaxRT().get()//
                         , averageRT//
                         , end[2]//
                         , end[4]//
+                        ,statsBenchmark.getSendMessageRTLevels().toString()
                         );
                 }
             }
@@ -122,11 +125,14 @@ public class Producer {
                             if (keyEnable) {
                                 msg.setKeys(String.valueOf(beginTimestamp / 1000));
                             }
-                            producer.send(msg);
-                            statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
-                            statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
+                            SendResult sendResult=producer.send(msg);
+                            
                             final long currentRT = System.currentTimeMillis() - beginTimestamp;
-                            statsBenchmark.getSendMessageSuccessTimeTotal().addAndGet(currentRT);
+                            if (sendResult != null) {
+	                            statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
+	                            statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
+	                            statsBenchmark.getSendMessageSuccessTimeTotal().addAndGet(currentRT);
+                            }
                             long prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
                             while (currentRT > prevMaxRT) {
                                 boolean updated =
@@ -137,6 +143,7 @@ public class Producer {
 
                                 prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
                             }
+                            statsBenchmark.putResponseTime(currentRT);
                         }
                         catch (RemotingException e) {
                             statsBenchmark.getSendRequestFailedCount().incrementAndGet();
@@ -204,7 +211,7 @@ class StatsBenchmarkProducer {
     private final AtomicLong sendMessageSuccessTimeTotal = new AtomicLong(0L);
     // 6
     private final AtomicLong sendMessageMaxRT = new AtomicLong(0L);
-
+    private final ConcurrentHashMap<Long,AtomicLong> sendMessageRTLevels=new ConcurrentHashMap();
 
     public Long[] createSnapshot() {
         Long[] snap = new Long[] {//
@@ -247,5 +254,20 @@ class StatsBenchmarkProducer {
 
     public AtomicLong getSendMessageMaxRT() {
         return sendMessageMaxRT;
+    }
+    public ConcurrentHashMap<Long, AtomicLong> getSendMessageRTLevels() {
+		return sendMessageRTLevels;
+	}
+    public void putResponseTime(long currentRT){
+    	Long lev=currentRT/1000;
+    	AtomicLong oldAtomic = sendMessageRTLevels.get(lev);
+    	if(oldAtomic==null){
+    		AtomicLong rt = new AtomicLong(1);
+    		oldAtomic =sendMessageRTLevels.putIfAbsent(lev, rt);
+    		if (oldAtomic==null){
+    			oldAtomic=rt;
+    		}
+    	}
+    	oldAtomic.incrementAndGet();
     }
 }

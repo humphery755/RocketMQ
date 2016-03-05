@@ -153,6 +153,10 @@ public class CommitLog {
 
         return null;
     }
+    
+    public MapedFileQueue getMapedFileQueue() {
+        return mapedFileQueue;
+    }
 
 
     /**

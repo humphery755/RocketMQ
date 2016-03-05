@@ -1,50 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 	<property name="LOG_HOME" value="${user.home}/logs/rocketmqlogs/" />
-	<appender name="DefaultAppender"
-		class="ch.qos.logback.core.rolling.RollingFileAppender">
-		<file>${LOG_HOME}/namesrv_default.log</file>
-		<append>true</append>
-		<rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-			<fileNamePattern>${LOG_HOME}/otherdays/namesrv_default.%i.log
-			</fileNamePattern>
-			<minIndex>1</minIndex>
-			<maxIndex>5</maxIndex>
-		</rollingPolicy>
-		<triggeringPolicy
-			class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
-			<maxFileSize>100MB</maxFileSize>
-		</triggeringPolicy>
-		<encoder>
-			<pattern>%d{yyy-MM-dd HH:mm:ss,GMT+8} %p %t - %m%n</pattern>
-			<charset class="java.nio.charset.Charset">UTF-8</charset>
-		</encoder>
-	</appender>
-
-	<appender name="RocketmqNamesrvAppender"
-		class="ch.qos.logback.core.rolling.RollingFileAppender">
-		<file>${LOG_HOME}/namesrv.log</file>
-		<append>true</append>
-		<rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-			<fileNamePattern>${LOG_HOME}/otherdays/namesrv.%i.log
-			</fileNamePattern>
-			<minIndex>1</minIndex>
-			<maxIndex>5</maxIndex>
-		</rollingPolicy>
-		<triggeringPolicy
-			class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
-			<maxFileSize>100MB</maxFileSize>
-		</triggeringPolicy>
-		<encoder>
-			<pattern>%d{yyy-MM-dd HH:mm:ss,GMT+8} %p %t - %m%n</pattern>
-			<charset class="java.nio.charset.Charset">UTF-8</charset>
-		</encoder>
-	</appender>
-
-	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+	<appender name="RocketmqNamesrvAppender" class="ch.qos.logback.core.ConsoleAppender">
 		<append>true</append>
 		<encoder>
-			<pattern>%d{yyy-MM-dd HH\:mm\:ss,SSS} %p %t - %m%n</pattern>
+			<pattern>%p %d{yyyyMMddHHmmss} %c{2}.%M.%line[%t]: %X{tId}.%X{rId}.1 %replace(%msg){'\\s',' '}%n</pattern>
 			<charset class="java.nio.charset.Charset">UTF-8</charset>
 		</encoder>
 	</appender>
@@ -66,6 +26,6 @@
 
 	<root>
 		<level value="INFO" />
-		<appender-ref ref="DefaultAppender" />
+		<appender-ref ref="RocketmqNamesrvAppender" />
 	</root>
 </configuration>

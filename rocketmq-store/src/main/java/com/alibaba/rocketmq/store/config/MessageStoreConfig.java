@@ -119,7 +119,7 @@ public class MessageStoreConfig extends JDBCTransactionStoreConfig{
     // Slave落后Master超过此值，则认为存在异常
     private int haSlaveFallbehindMax = 1024 * 1024 * 256;
     @ImportantField
-    private BrokerRole brokerRole = BrokerRole.ASYNC_MASTER;
+    private BrokerRole brokerRole = BrokerRole.UNINITIALIZED;
     @ImportantField
     private FlushDiskType flushDiskType = FlushDiskType.ASYNC_FLUSH;
     // 同步刷盘超时时间

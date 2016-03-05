@@ -1546,6 +1546,11 @@ public class DefaultMessageStore implements MessageStore {
 					// 1、分发消息位置信息到ConsumeQueue
 					switch (tranType) {
 					case MessageSysFlag.TransactionNotType:
+						// 将请求发到具体的Consume Queue
+						DefaultMessageStore.this.putMessagePostionInfo(req.getTopic(), req.getQueueId(),
+								req.getCommitLogOffset(), req.getMsgSize(), req.getTagsCode(), req.getStoreTimestamp(),
+								req.getConsumeQueueOffset());
+						continue;
 					case MessageSysFlag.TransactionCommitType:
 						// 将请求发到具体的Consume Queue
 						DefaultMessageStore.this.putMessagePostionInfo(req.getTopic(), req.getQueueId(),
@@ -1624,8 +1629,18 @@ public class DefaultMessageStore implements MessageStore {
 
 		private void doReput() {
 			for (boolean doNext = true; doNext;) {
-				SelectMapedBufferResult result = DefaultMessageStore.this.commitLog.getData(reputFromOffset);
+				int mapedFileSize = DefaultMessageStore.this.getMessageStoreConfig().getMapedFileSizeCommitLog();
+		        MapedFile mapedFile = DefaultMessageStore.this.commitLog.getMapedFileQueue().findMapedFileByOffsetV1(reputFromOffset, true);
+		        SelectMapedBufferResult result = null;
+		        if (mapedFile != null) {
+		        	//修复SLAVE同步落后于主节点数据问题
+		        	if(reputFromOffset<mapedFile.getFileFromOffset())reputFromOffset=mapedFile.getFileFromOffset();
+		            int pos = (int) (reputFromOffset % mapedFileSize);
+		            result = mapedFile.selectMapedBuffer(pos);
+		        }
+		        
 				if (result != null) {
+					
 					try {
 						// 当主机有很多数据，备机没有数据时，此时启动备机，备机会从主机的末尾开始拉数据
 						// 这时reputFromOffset的初始值和commitlog的值不匹配。
