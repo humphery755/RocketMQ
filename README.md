@@ -1,4 +1,4 @@
-### RocketMQ https://github.com/alibaba/RocketMQ/releases
+### RocketMQ
 
 * 基于https://github.com/alibaba/RocketMQ 3.2.6
 * 增加了对事务的支持（JDBC事务、事务日志两种实现）
