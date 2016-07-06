@@ -48,7 +48,7 @@ public class JDBCTransactionStore implements TransactionStore {
 	public JDBCTransactionStore(DefaultMessageStore messageStore) {
 		this.messageStore = messageStore;
 		ChronicleMapBuilder<Long, TransactionRecord> tranStateMapBuilder = ChronicleMapBuilder
-				.of(Long.class, TransactionRecord.class).entries(500_000);
+				.of(Long.class, TransactionRecord.class).entries(1 << 20);
 		tranStateTable = tranStateMapBuilder.create();
 	}
 

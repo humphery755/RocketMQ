@@ -105,7 +105,12 @@ public class FastLeaderElection {
 		long txid = paxosController.getMyid() * paxosController.getNsServers().size() + logicalclock.get();
 		LOG.debug("id: " + paxosController.getMyid()  + ", epoch: " + logicalclock.get() + ", peer epoch: " + logicalclock.get() + ", txid: " + txid);
 		updateProposal(paxosController.getMyid(), txid, logicalclock.get());
-		sendNotifications();
+		if(paxosController.getNsServers().size()==1){
+			PaxosRequestHeader req = buildNotification();
+			putRequest(req);
+		}else{
+			sendNotifications();
+		}
 	}
 
 	protected boolean totalOrderPredicate1(long newId, long newtxid, long newEpoch, long curId, long curtxid, long curEpoch) {
@@ -156,7 +161,7 @@ public class FastLeaderElection {
 			PaxosRequestHeader n = recvQueue.poll(3000, TimeUnit.MILLISECONDS);
 			if (n == null)
 				return false;
-			PaxosNotificationBody nb = n.getBody();
+			PaxosNotificationBody nb = (PaxosNotificationBody)n.getBody();
 			if(nb.getState()==PaxosRequestHeader.RESET){
 				if(nb.getElectionEpoch()<= logicalclock.get() && (FastLeaderElection.this.state==PaxosRequestHeader.FOLLOWING ||FastLeaderElection.this.state==PaxosRequestHeader.LEADING)){
 					FastLeaderElection.this.leader = -1;
@@ -432,12 +437,13 @@ public class FastLeaderElection {
 
 	private PaxosRequestHeader buildNotification() {
 		PaxosRequestHeader req = new PaxosRequestHeader();
-		req.setBody(new PaxosNotificationBody());
-		req.getBody().setElectionEpoch(currentVote.getElectionEpoch());
-		req.getBody().setPeerEpoch(currentVote.getPeerEpoch());
-		req.getBody().setLeader(currentVote.getId());
-		req.getBody().setTxid(currentVote.getTxid());
-		req.getBody().setState(currentVote.getState());
+		 PaxosNotificationBody body=new PaxosNotificationBody();
+		req.setBody(body);
+		body.setElectionEpoch(currentVote.getElectionEpoch());
+		body.setPeerEpoch(currentVote.getPeerEpoch());
+		body.setLeader(currentVote.getId());
+		body.setTxid(currentVote.getTxid());
+		body.setState(currentVote.getState());
 		req.setSid(paxosController.getMyid());
 		return req;
 	}
@@ -451,7 +457,7 @@ public class FastLeaderElection {
 		PaxosRequestHeader req = buildNotification();
 		Server s = paxosController.getNsServers().get(sid);
 		// workerReceiver.putOutofelection(currentVote);
-		req.getBody().setAddr(s.getAddr());
+		((PaxosNotificationBody)req.getBody()).setAddr(s.getAddr());
 		workerSender.putRequest(req);
 	}
 
@@ -509,8 +515,10 @@ public class FastLeaderElection {
 			PaxosRequestHeader req = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
 			if (req == null)
 				return false;
-			String addr=req.getBody().getAddr();
-			req.getBody().setAddr(null);
+			
+			PaxosNotificationBody body=(PaxosNotificationBody)req.getBody();
+			String addr=body.getAddr();
+			body.setAddr(null);
 			RemotingCommand m = RemotingCommand.createRequestCommand(RequestCode.PAXOS_ALGORITHM_REQUEST_CODE, req);
 			m.setBody(req.getBody().encode());
 			if(addr!=null){
@@ -672,9 +680,10 @@ public class FastLeaderElection {
 				synchronized (this) {
 					if(this.leader==-1)return;
 					PaxosRequestHeader req = new PaxosRequestHeader();
-					req.setBody(new PaxosNotificationBody());
-					req.getBody().setState(PaxosRequestHeader.RESET);
-					req.getBody().setElectionEpoch(epoch);
+					PaxosNotificationBody body=new PaxosNotificationBody();
+					req.setBody(body);
+					body.setState(PaxosRequestHeader.RESET);
+					body.setElectionEpoch(epoch);
 					req.setSid(paxosController.getMyid());
 					remove();
 					workerReceiver.putRequest(req);

@@ -63,8 +63,8 @@
 			<artifactId>javassist</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>commons-daemon</groupId>
-			<artifactId>commons-daemon</artifactId>
+			<groupId>com.101tec</groupId>
+			<artifactId>zkclient</artifactId>
 		</dependency>
 	</dependencies>
 </project>

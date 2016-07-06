@@ -100,8 +100,11 @@ public class Consumer {
                 new DefaultMQPushConsumer("benchmark_consumer_1");
         //consumer.setInstanceName(Long.toString(System.currentTimeMillis()));
 		consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
-		int consumeMessageBatchMaxSize = 32;
+		int consumeMessageBatchMaxSize = 320;
 		consumer.setConsumeMessageBatchMaxSize(consumeMessageBatchMaxSize);
+		int consumeThreadMax=Integer.valueOf(sysConfig.getProperty("mq.consumeThreadMax", "64"));
+		consumer.setConsumeThreadMax(consumeThreadMax);
+		consumer.setConsumeThreadMin(consumeThreadMax/2);
         consumer.subscribe(topic, "*");
 
         consumer.registerMessageListener(new MessageListenerConcurrently() {

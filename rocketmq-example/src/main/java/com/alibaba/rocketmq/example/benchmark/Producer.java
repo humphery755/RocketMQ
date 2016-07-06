@@ -32,242 +32,227 @@ import com.alibaba.rocketmq.client.producer.SendResult;
 import com.alibaba.rocketmq.common.message.Message;
 import com.alibaba.rocketmq.remoting.exception.RemotingException;
 
-
 /**
  * 性能测试，多线程同步发送消息
  */
 public class Producer {
-	private static Properties sysConfig=new Properties();
-    public static void main(String[] args) throws MQClientException {
-        final int threadCount = args.length >= 1 ? Integer.parseInt(args[0]) : 64;
-        final int messageSize = args.length >= 2 ? Integer.parseInt(args[1]) : 128;
-        final boolean keyEnable = args.length >= 3 ? Boolean.parseBoolean(args[2]) : false;
+	private static Properties sysConfig = new Properties();
+	private static String topic;
+	private static String msgBody;
 
-        System.out
-            .printf("threadCount %d messageSize %d keyEnable %s\n", threadCount, messageSize, keyEnable);
-        try {
+	public static void main(String[] args) throws MQClientException {
+		final int threadCount = args.length >= 1 ? Integer.parseInt(args[0]) : 64;
+		final int messageSize = args.length >= 2 ? Integer.parseInt(args[1]) : 128;
+		final boolean keyEnable = args.length >= 3 ? Boolean.parseBoolean(args[2]) : false;
+
+		System.out.printf("threadCount %d messageSize %d keyEnable %s\n", threadCount, messageSize, keyEnable);
+		try {
 			sysConfig.load(new FileInputStream("./init.properties"));
+			topic = sysConfig.getProperty("mq.topic", "BenchmarkTest");
+			msgBody = sysConfig.getProperty("mq.msgBody");
 		} catch (Exception e1) {
 			e1.printStackTrace();
 		}
-        final Message msg = buildMessage(messageSize);
+		final Message msg = buildMessage(messageSize);
 
-        final ExecutorService sendThreadPool = Executors.newFixedThreadPool(threadCount);
+		final ExecutorService sendThreadPool = Executors.newFixedThreadPool(threadCount);
 
-        final StatsBenchmarkProducer statsBenchmark = new StatsBenchmarkProducer();
+		final StatsBenchmarkProducer statsBenchmark = new StatsBenchmarkProducer();
 
-        final Timer timer = new Timer("BenchmarkTimerThread", true);
+		final Timer timer = new Timer("BenchmarkTimerThread", true);
 
-        final LinkedList<Long[]> snapshotList = new LinkedList<Long[]>();
+		final LinkedList<Long[]> snapshotList = new LinkedList<Long[]>();
 
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                snapshotList.addLast(statsBenchmark.createSnapshot());
-                if (snapshotList.size() > 10) {
-                    snapshotList.removeFirst();
-                }
-            }
-        }, 1000, 1000);
+		timer.scheduleAtFixedRate(new TimerTask() {
+			@Override
+			public void run() {
+				snapshotList.addLast(statsBenchmark.createSnapshot());
+				if (snapshotList.size() > 10) {
+					snapshotList.removeFirst();
+				}
+			}
+		}, 1000, 1000);
 
-        timer.scheduleAtFixedRate(new TimerTask() {
-            private void printStats() {
-                if (snapshotList.size() >= 10) {
-                    Long[] begin = snapshotList.getFirst();
-                    Long[] end = snapshotList.getLast();
+		timer.scheduleAtFixedRate(new TimerTask() {
+			private void printStats() {
+				if (snapshotList.size() >= 10) {
+					Long[] begin = snapshotList.getFirst();
+					Long[] end = snapshotList.getLast();
 
-                    final long sendTps =
-                            (long) (((end[3] - begin[3]) / (double) (end[0] - begin[0])) * 1000L);
-                    final double averageRT = ((end[5] - begin[5]) / (double) (end[3] - begin[3]));
+					final long sendTps = (long) (((end[3] - begin[3]) / (double) (end[0] - begin[0])) * 1000L);
+					final double averageRT = ((end[5] - begin[5]) / (double) (end[3] - begin[3]));
 
-                    System.out.printf(
-                        "Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d RT Level: %s\n"//
-                        , sendTps//
-                        , statsBenchmark.getSendMessageMaxRT().get()//
-                        , averageRT//
-                        , end[2]//
-                        , end[4]//
-                        ,statsBenchmark.getSendMessageRTLevels().toString()
-                        );
-                }
-            }
+					System.out.printf("Send TPS: %d Max RT: %d Average RT: %7.3f Send Failed: %d Response Failed: %d RT Level: %s\n"//
+							, sendTps//
+							, statsBenchmark.getSendMessageMaxRT().get()//
+							, averageRT//
+							, end[2]//
+							, end[4]//
+							, statsBenchmark.getSendMessageRTLevels().toString());
+				}
+			}
 
+			@Override
+			public void run() {
+				try {
+					this.printStats();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}, 10000, 10000);
 
-            @Override
-            public void run() {
-                try {
-                    this.printStats();
-                }
-                catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }, 10000, 10000);
+		final DefaultMQProducer producer = new DefaultMQProducer("benchmark_producer");
+		producer.setInstanceName(Long.toString(System.currentTimeMillis()));
 
-        final DefaultMQProducer producer = new DefaultMQProducer("benchmark_producer");
-        producer.setInstanceName(Long.toString(System.currentTimeMillis()));
+		producer.setCompressMsgBodyOverHowmuch(Integer.MAX_VALUE);
 
-        producer.setCompressMsgBodyOverHowmuch(Integer.MAX_VALUE);
-     		
- 		producer.setDefaultTopicQueueNums(Integer.valueOf(sysConfig.getProperty("mq.defaultTopicQueueNums")));
- 		
- 		producer.setSendMsgTimeout(Integer.valueOf(sysConfig.getProperty("mq.sendMsgTimeout")));
- 		
-        producer.start();
+		producer.setDefaultTopicQueueNums(Integer.valueOf(sysConfig.getProperty("mq.defaultTopicQueueNums")));
 
-        for (int i = 0; i < threadCount; i++) {
-            sendThreadPool.execute(new Runnable() {
-                @Override
-                public void run() {
-                    while (true) {
-                        try {
-                            final long beginTimestamp = System.currentTimeMillis();
-                            if (keyEnable) {
-                                msg.setKeys(String.valueOf(beginTimestamp / 1000));
-                            }
-                            SendResult sendResult=producer.send(msg);
-                            
-                            final long currentRT = System.currentTimeMillis() - beginTimestamp;
-                            if (sendResult != null) {
-	                            statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
-	                            statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
-	                            statsBenchmark.getSendMessageSuccessTimeTotal().addAndGet(currentRT);
-                            }
-                            long prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
-                            while (currentRT > prevMaxRT) {
-                                boolean updated =
-                                        statsBenchmark.getSendMessageMaxRT().compareAndSet(prevMaxRT,
-                                            currentRT);
-                                if (updated)
-                                    break;
+		producer.setSendMsgTimeout(Integer.valueOf(sysConfig.getProperty("mq.sendMsgTimeout")));
 
-                                prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
-                            }
-                            statsBenchmark.putResponseTime(currentRT);
-                        }
-                        catch (RemotingException e) {
-                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
-                            e.printStackTrace();
+		producer.start();
 
-                            try {
-                                Thread.sleep(3000);
-                            }
-                            catch (InterruptedException e1) {
-                            }
-                        }
-                        catch (InterruptedException e) {
-                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
-                            try {
-                                Thread.sleep(3000);
-                            }
-                            catch (InterruptedException e1) {
-                            }
-                        }
-                        catch (MQClientException e) {
-                            statsBenchmark.getSendRequestFailedCount().incrementAndGet();
-                            e.printStackTrace();
-                        }
-                        catch (MQBrokerException e) {
-                            statsBenchmark.getReceiveResponseFailedCount().incrementAndGet();
-                            try {
-                                Thread.sleep(3000);
-                            }
-                            catch (InterruptedException e1) {
-                            }
-                        }
-                    }
-                }
-            });
-        }
-    }
+		for (int i = 0; i < threadCount; i++) {
+			sendThreadPool.execute(new Runnable() {
+				@Override
+				public void run() {
+					while (true) {
+						try {
+							final long beginTimestamp = System.currentTimeMillis();
+							if (keyEnable) {
+								msg.setKeys(String.valueOf(beginTimestamp / 1000));
+							}
+							SendResult sendResult = producer.send(msg);
 
+							final long currentRT = System.currentTimeMillis() - beginTimestamp;
+							if (sendResult != null) {
+								statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
+								statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
+								statsBenchmark.getSendMessageSuccessTimeTotal().addAndGet(currentRT);
+							}
+							long prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
+							while (currentRT > prevMaxRT) {
+								boolean updated = statsBenchmark.getSendMessageMaxRT().compareAndSet(prevMaxRT, currentRT);
+								if (updated)
+									break;
 
-    private static Message buildMessage(final int messageSize) {
-        Message msg = new Message();
-        msg.setTopic("BenchmarkTest");
+								prevMaxRT = statsBenchmark.getSendMessageMaxRT().get();
+							}
+							statsBenchmark.putResponseTime(currentRT);
+						} catch (RemotingException e) {
+							statsBenchmark.getSendRequestFailedCount().incrementAndGet();
+							e.printStackTrace();
 
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < messageSize; i += 10) {
-            sb.append("hello baby");
-        }
+							try {
+								Thread.sleep(3000);
+							} catch (InterruptedException e1) {
+							}
+						} catch (InterruptedException e) {
+							statsBenchmark.getSendRequestFailedCount().incrementAndGet();
+							try {
+								Thread.sleep(3000);
+							} catch (InterruptedException e1) {
+							}
+						} catch (MQClientException e) {
+							statsBenchmark.getSendRequestFailedCount().incrementAndGet();
+							e.printStackTrace();
+						} catch (MQBrokerException e) {
+							statsBenchmark.getReceiveResponseFailedCount().incrementAndGet();
+							try {
+								Thread.sleep(3000);
+							} catch (InterruptedException e1) {
+							}
+						}
+					}
+				}
+			});
+		}
+	}
 
-        msg.setBody(sb.toString().getBytes());
+	private static Message buildMessage(final int messageSize) {
+		Message msg = new Message();
+		msg.setTopic(topic);
+		if (msgBody == null) {
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i < messageSize; i += 10) {
+				sb.append("hello baby");
+			}
 
-        return msg;
-    }
+			msg.setBody(sb.toString().getBytes());
+		} else {
+			msg.setBody(msgBody.getBytes());
+		}
+		return msg;
+	}
 }
 
-
 class StatsBenchmarkProducer {
-    // 1
-    private final AtomicLong sendRequestSuccessCount = new AtomicLong(0L);
-    // 2
-    private final AtomicLong sendRequestFailedCount = new AtomicLong(0L);
-    // 3
-    private final AtomicLong receiveResponseSuccessCount = new AtomicLong(0L);
-    // 4
-    private final AtomicLong receiveResponseFailedCount = new AtomicLong(0L);
-    // 5
-    private final AtomicLong sendMessageSuccessTimeTotal = new AtomicLong(0L);
-    // 6
-    private final AtomicLong sendMessageMaxRT = new AtomicLong(0L);
-    private final ConcurrentHashMap<Long,AtomicLong> sendMessageRTLevels=new ConcurrentHashMap();
+	// 1
+	private final AtomicLong sendRequestSuccessCount = new AtomicLong(0L);
+	// 2
+	private final AtomicLong sendRequestFailedCount = new AtomicLong(0L);
+	// 3
+	private final AtomicLong receiveResponseSuccessCount = new AtomicLong(0L);
+	// 4
+	private final AtomicLong receiveResponseFailedCount = new AtomicLong(0L);
+	// 5
+	private final AtomicLong sendMessageSuccessTimeTotal = new AtomicLong(0L);
+	// 6
+	private final AtomicLong sendMessageMaxRT = new AtomicLong(0L);
+	private final ConcurrentHashMap<Long, AtomicLong> sendMessageRTLevels = new ConcurrentHashMap();
 
-    public Long[] createSnapshot() {
-        Long[] snap = new Long[] {//
-                System.currentTimeMillis(),//
-                        this.sendRequestSuccessCount.get(),//
-                        this.sendRequestFailedCount.get(),//
-                        this.receiveResponseSuccessCount.get(),//
-                        this.receiveResponseFailedCount.get(),//
-                        this.sendMessageSuccessTimeTotal.get(), //
-                };
+	public Long[] createSnapshot() {
+		Long[] snap = new Long[] { //
+				System.currentTimeMillis(), //
+				this.sendRequestSuccessCount.get(), //
+				this.sendRequestFailedCount.get(), //
+				this.receiveResponseSuccessCount.get(), //
+				this.receiveResponseFailedCount.get(), //
+				this.sendMessageSuccessTimeTotal.get(), //
+		};
 
-        return snap;
-    }
+		return snap;
+	}
 
+	public AtomicLong getSendRequestSuccessCount() {
+		return sendRequestSuccessCount;
+	}
 
-    public AtomicLong getSendRequestSuccessCount() {
-        return sendRequestSuccessCount;
-    }
+	public AtomicLong getSendRequestFailedCount() {
+		return sendRequestFailedCount;
+	}
 
+	public AtomicLong getReceiveResponseSuccessCount() {
+		return receiveResponseSuccessCount;
+	}
 
-    public AtomicLong getSendRequestFailedCount() {
-        return sendRequestFailedCount;
-    }
+	public AtomicLong getReceiveResponseFailedCount() {
+		return receiveResponseFailedCount;
+	}
 
+	public AtomicLong getSendMessageSuccessTimeTotal() {
+		return sendMessageSuccessTimeTotal;
+	}
 
-    public AtomicLong getReceiveResponseSuccessCount() {
-        return receiveResponseSuccessCount;
-    }
+	public AtomicLong getSendMessageMaxRT() {
+		return sendMessageMaxRT;
+	}
 
-
-    public AtomicLong getReceiveResponseFailedCount() {
-        return receiveResponseFailedCount;
-    }
-
-
-    public AtomicLong getSendMessageSuccessTimeTotal() {
-        return sendMessageSuccessTimeTotal;
-    }
-
-
-    public AtomicLong getSendMessageMaxRT() {
-        return sendMessageMaxRT;
-    }
-    public ConcurrentHashMap<Long, AtomicLong> getSendMessageRTLevels() {
+	public ConcurrentHashMap<Long, AtomicLong> getSendMessageRTLevels() {
 		return sendMessageRTLevels;
 	}
-    public void putResponseTime(long currentRT){
-    	Long lev=currentRT/1000;
-    	AtomicLong oldAtomic = sendMessageRTLevels.get(lev);
-    	if(oldAtomic==null){
-    		AtomicLong rt = new AtomicLong(1);
-    		oldAtomic =sendMessageRTLevels.putIfAbsent(lev, rt);
-    		if (oldAtomic==null){
-    			oldAtomic=rt;
-    		}
-    	}
-    	oldAtomic.incrementAndGet();
-    }
+
+	public void putResponseTime(long currentRT) {
+		Long lev = currentRT / 1000;
+		AtomicLong oldAtomic = sendMessageRTLevels.get(lev);
+		if (oldAtomic == null) {
+			AtomicLong rt = new AtomicLong(1);
+			oldAtomic = sendMessageRTLevels.putIfAbsent(lev, rt);
+			if (oldAtomic == null) {
+				oldAtomic = rt;
+			}
+		}
+		oldAtomic.incrementAndGet();
+	}
 }

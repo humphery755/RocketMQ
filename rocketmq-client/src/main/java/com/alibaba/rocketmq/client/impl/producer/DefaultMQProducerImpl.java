@@ -30,7 +30,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
-import org.slf4j.MDC;
 
 import com.alibaba.rocketmq.client.QueryResult;
 import com.alibaba.rocketmq.client.Validators;
@@ -92,13 +91,11 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     private final ArrayList<SendMessageHook> sendMessageHookList = new ArrayList<SendMessageHook>();
     private ArrayList<CheckForbiddenHook> checkForbiddenHookList = new ArrayList<CheckForbiddenHook>();
     private final RPCHook rpcHook;
-    private static String appid;
 
 
     public DefaultMQProducerImpl(final DefaultMQProducer defaultMQProducer, RPCHook rpcHook) {
         this.defaultMQProducer = defaultMQProducer;
         this.rpcHook = rpcHook;
-        if(appid==null)appid = System.getProperty("app.id", "x");
     }
 
 
@@ -323,12 +320,6 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 if (transactionCheckListener != null) {
                     LocalTransactionState localTransactionState = LocalTransactionState.UNKNOW;
                     Throwable exception = null;
-                    String tId = message.getProperty("tId");
-            		String rId = message.getProperty("rId");
-            		if(tId!=null)
-            			MDC.put("tId", tId);
-            		if(rId!=null)
-            			MDC.put("rId", rId);
                     try {
                         localTransactionState = transactionCheckListener.checkLocalTransactionState(message);
                     }
@@ -646,15 +637,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             final SendCallback sendCallback,//
             final long timeout) throws MQClientException, RemotingException, MQBrokerException,
             InterruptedException {
-    	String tId = MDC.get("tId");
-		String rId = MDC.get("rId");
-		if(tId!=null)
-			MessageAccessor.putProperty(msg, "tId", tId);
-		if(rId!=null)    	
-			MessageAccessor.putProperty(msg, "rId", rId+"."+appid);
-		else
-			MessageAccessor.putProperty(msg, "rId", appid);
-		
+	
         String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
         if (null == brokerAddr) {
             tryToFindTopicPublishInfo(mq.getTopic());
