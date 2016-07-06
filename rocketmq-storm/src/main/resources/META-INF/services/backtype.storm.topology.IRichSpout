@@ -1,0 +1,3 @@
+com.alibaba.rocketmq.storm.spout.SimpleMessageSpout
+com.alibaba.rocketmq.storm.spout.BatchMessageSpout
+com.alibaba.rocketmq.storm.spout.StreamMessageSpout

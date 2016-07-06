@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+	<appender name="DEFAULT" class="org.apache.log4j.ConsoleAppender">
+		<param name="encoding" value="UTF8" />
+		<layout class="org.apache.log4j.PatternLayout">
+			<param name="ConversionPattern" value="%d %5p %c{3} %L - %m%n" />
+		</layout>
+	</appender>
+
+	<logger name="org.apache.zookeeper" additivity="false">
+		<level value="WARN" />
+		<appender-ref ref="DEFAULT" />
+	</logger>
+	<logger name="com.alibaba" additivity="false">
+		<level value="INFO" />
+		<appender-ref ref="DEFAULT" />
+	</logger>
+	<logger name="com.netflix.curator" additivity="false">
+		<level value="WARN" />
+		<appender-ref ref="DEFAULT" />
+	</logger>
+	
+	<root>
+		<level value="INFO" />
+		<appender-ref ref="DEFAULT" />
+	</root>
+</log4j:configuration>
