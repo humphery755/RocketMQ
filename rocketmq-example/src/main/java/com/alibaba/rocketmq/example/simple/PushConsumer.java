@@ -47,7 +47,7 @@ public class PushConsumer {
          * 订阅指定topic下所有消息<br>
          * 注意：一个consumer对象可以订阅多个topic
          */
-        consumer.subscribe("TopicTest2", "*");
+        consumer.subscribe("BenchmarkTest", "*");
         consumer.subscribe("TopicTest3", "*");
 
         /**

@@ -46,6 +46,7 @@ public class TransactionProducer {
     private static boolean ischeckffalse;
     private static Properties sysConfig=new Properties();
     private static String topic;
+    private static String msgBody;
 
     public static void main(String[] args) throws MQClientException {
         threadCount = args.length >= 1 ? Integer.parseInt(args[0]) : 32;
@@ -56,6 +57,7 @@ public class TransactionProducer {
         try {
 			sysConfig.load(new FileInputStream("./init.properties"));
 			topic=sysConfig.getProperty("mq.topic", "BenchmarkTest");
+			msgBody=sysConfig.getProperty("mq.msgBody");
 		} catch (Exception e1) {
 			e1.printStackTrace();
 		}
@@ -183,13 +185,16 @@ public class TransactionProducer {
         Message msg = new Message();
         msg.setTopic(topic);
 
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < messageSize; i += 10) {
-            sb.append("hello baby");
+        if(msgBody==null){
+	        StringBuilder sb = new StringBuilder();
+	        for (int i = 0; i < messageSize; i += 10) {
+	            sb.append("hello baby");
+	        }
+	
+	        msg.setBody(sb.toString().getBytes());
+        }else{
+        	msg.setBody(msgBody.getBytes());
         }
-
-        msg.setBody(sb.toString().getBytes());
-
         return msg;
     }
 }

@@ -32,8 +32,8 @@ public class PullConsumerTest {
         try {
             MessageQueue mq = new MessageQueue();
             mq.setQueueId(0);
-            mq.setTopic("TopicTest3");
-            mq.setBrokerName("vivedeMacBook-Pro.local");
+            mq.setTopic("BenchmarkTest");
+            mq.setBrokerName("broker-a");
 
             long offset = 26;
 
