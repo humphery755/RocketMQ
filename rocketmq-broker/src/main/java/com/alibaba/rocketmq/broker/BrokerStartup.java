@@ -51,6 +51,8 @@ import ch.qos.logback.classic.joran.JoranConfigurator;
  * @since 2013-7-26
  */
 public class BrokerStartup {
+	static volatile boolean runing;
+	static Object obj = new Object();
     public static Properties properties = null;
     public static CommandLine commandLine = null;
     public static String configFile = null;
@@ -74,7 +76,18 @@ public class BrokerStartup {
 
 
     public static void main(String[] args) {
-        start(createBrokerController(args));
+    	BrokerController controller = createBrokerController(args);
+        start(controller);
+        synchronized (obj) {
+			while (runing) {
+				try {
+					obj.wait(10);
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}
+			}
+		}
+        shutdown(controller);
     }
 
 
@@ -231,24 +244,12 @@ public class BrokerStartup {
                 controller.shutdown();
                 System.exit(-3);
             }
-
+            runing=true;
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-                private volatile boolean hasShutdown = false;
-                private AtomicInteger shutdownTimes = new AtomicInteger(0);
-
 
                 @Override
                 public void run() {
-                    synchronized (this) {
-                        log.info("shutdown hook was invoked, " + this.shutdownTimes.incrementAndGet());
-                        if (!this.hasShutdown) {
-                            this.hasShutdown = true;
-                            long begineTime = System.currentTimeMillis();
-                            controller.shutdown();
-                            long consumingTimeTotal = System.currentTimeMillis() - begineTime;
-                            log.info("shutdown hook over, consuming time total(ms): " + consumingTimeTotal);
-                        }
-                    }
+                	shutdown(controller);
                 }
             }, "ShutdownHook"));
 
@@ -261,7 +262,20 @@ public class BrokerStartup {
 
         return null;
     }
-
+    private static AtomicInteger shutdownTimes = new AtomicInteger(0);
+    private  static void shutdown(BrokerController controller){
+    	 synchronized (obj) {
+             log.info("shutdown hook was invoked, " + shutdownTimes.incrementAndGet());
+             if (runing) {
+                 long begineTime = System.currentTimeMillis();
+                 controller.shutdown();
+                 runing = false;
+                 obj.notify();
+                 long consumingTimeTotal = System.currentTimeMillis() - begineTime;
+                 log.info("shutdown hook over, consuming time total(ms): " + consumingTimeTotal);
+             }
+         }
+    }
 
     public static BrokerController start(BrokerController controller) {
         try {

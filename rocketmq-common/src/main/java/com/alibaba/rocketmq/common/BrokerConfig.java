@@ -94,7 +94,11 @@ public class BrokerConfig {
 
     // slave 是否需要纠正位点
     private boolean offsetCheckInSlave = false;
-
+    
+    private String brokerRole;
+    private String zkServer;
+    private int connectionTimeout = 50000;
+    private String lockPath = "/com.alibaba.rocketmq.broker";
 
     public static String localHostName() {
         try {
@@ -386,4 +390,44 @@ public class BrokerConfig {
     public void setOffsetCheckInSlave(boolean offsetCheckInSlave) {
         this.offsetCheckInSlave = offsetCheckInSlave;
     }
+
+
+	public String getBrokerRole() {
+		return brokerRole;
+	}
+
+
+	public void setBrokerRole(String brokerRole) {
+		this.brokerRole = brokerRole;
+	}
+
+
+	public String getZkServer() {
+		return zkServer;
+	}
+
+
+	public void setZkServer(String zkServer) {
+		this.zkServer = zkServer;
+	}
+
+
+	public int getConnectionTimeout() {
+		return connectionTimeout;
+	}
+
+
+	public void setConnectionTimeout(int connectionTimeout) {
+		this.connectionTimeout = connectionTimeout;
+	}
+
+
+	public String getLockPath() {
+		return lockPath;
+	}
+
+
+	public void setLockPath(String lockPath) {
+		this.lockPath = lockPath;
+	}
 }

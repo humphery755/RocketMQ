@@ -49,6 +49,8 @@ import com.alibaba.rocketmq.srvutil.ServerUtil;
  * @since 2013-7-5
  */
 public class NamesrvStartup {
+	static boolean runing;
+	static Object obj = new Object();
     public static Properties properties = null;
     public static CommandLine commandLine = null;
 
@@ -68,6 +70,15 @@ public class NamesrvStartup {
 
     public static void main(String[] args) {
         main0(args);
+        synchronized (obj) {
+			while (runing) {
+				try {
+					obj.wait();
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}
+			}
+		}
     }
 
 
@@ -149,6 +160,8 @@ public class NamesrvStartup {
                 controller.shutdown();
                 System.exit(-3);
             }
+            
+            runing=true;
 
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 private volatile boolean hasShutdown = false;
@@ -157,12 +170,14 @@ public class NamesrvStartup {
 
                 @Override
                 public void run() {
-                    synchronized (this) {
+                    synchronized (obj) {
                         log.info("shutdown hook was invoked, " + this.shutdownTimes.incrementAndGet());
                         if (!this.hasShutdown) {
                             this.hasShutdown = true;
                             long begineTime = System.currentTimeMillis();
                             controller.shutdown();
+                            runing = false;
+                            obj.notify();
                             long consumingTimeTotal = System.currentTimeMillis() - begineTime;
                             log.info("shutdown hook over, consuming time total(ms): " + consumingTimeTotal);
                         }

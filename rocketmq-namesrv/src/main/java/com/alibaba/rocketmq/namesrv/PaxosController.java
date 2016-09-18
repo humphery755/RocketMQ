@@ -53,6 +53,7 @@ public class PaxosController {
 	private RemotingClient remotingClient;
 
 	public PaxosController(NamesrvController namesrvController) {
+	
 		this.namesrvController = namesrvController;
 		myid = namesrvController.getNamesrvConfig().getMyid();
 		if (namesrvController.getNamesrvConfig().getNamesrvAddr() == null) {
@@ -76,6 +77,7 @@ public class PaxosController {
 	}
 
 	public boolean initialize() {
+		if(1==1)return true;
 		this.remotingServer = namesrvController.getRemotingServer();
 		// 初始化通信层
 
@@ -94,6 +96,7 @@ public class PaxosController {
 	}
 
 	public void start() throws Exception {
+		if(1==1)return ;
 		// this.remotingServer.start();
 		remotingClient.start();
 		fastLeaderElection.start();
@@ -101,6 +104,7 @@ public class PaxosController {
 	}
 
 	public void shutdown() {
+		if(1==1)return ;
 		// this.remotingServer.shutdown();
 		paxosRequestProcessor.shutdown();
 		fastLeaderElection.shutdown();

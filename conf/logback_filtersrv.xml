@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-	<property name="LOG_HOME" value="${user.home}/logs/rocketmqlogs/" />
+	<property name="LOG_HOME" value="logs" />
 	<appender name="DefaultAppender"
 		class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<file>${LOG_HOME}/filtersrv_default.log</file>

@@ -151,8 +151,20 @@ public class TransactionProducer {
                             TransactionSendResult sendResult =
                                     producer.sendMessageInTransaction(msg, tranExecuter, null);
                             if (sendResult != null) {
-                                statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
-                                statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
+                            	statsBenchmark.getSendRequestSuccessCount().incrementAndGet();
+                                
+                            	switch (sendResult.getSendStatus()) {
+                                case SEND_OK: {
+                                	statsBenchmark.getReceiveResponseSuccessCount().incrementAndGet();
+                                }
+                                case FLUSH_DISK_TIMEOUT:
+                                case FLUSH_SLAVE_TIMEOUT:
+                                case SLAVE_NOT_AVAILABLE:
+                                	break;
+                                default:
+                                }
+                                
+                                
                             }
 
                             final long currentRT = System.currentTimeMillis() - beginTimestamp;
@@ -169,7 +181,7 @@ public class TransactionProducer {
                             }
                             statsBenchmark.putResponseTime(currentRT);
                         }
-                        catch (MQClientException e) {
+                        catch (Exception e) {
                             statsBenchmark.getSendRequestFailedCount().incrementAndGet();
                             e.printStackTrace();
                         }

@@ -66,5 +66,9 @@
 			<groupId>com.101tec</groupId>
 			<artifactId>zkclient</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.daemon.wrapper</groupId>
+			<artifactId>daemon-wrapper</artifactId>
+		</dependency>
 	</dependencies>
 </project>

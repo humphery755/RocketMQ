@@ -41,6 +41,7 @@
         <module>rocketmq-filtersrv</module>
         <module>rocketmq-srvutil</module>
         <module>rocketmq-storm</module>
+		<module>rocketmq-console</module>
     </modules>
 
     <developers>
@@ -434,6 +435,11 @@
                 <artifactId>zkclient</artifactId>
                 <version>0.9</version>
             </dependency>
+			<dependency>
+				<groupId>org.daemon.wrapper</groupId>
+				<artifactId>daemon-wrapper</artifactId>
+				<version>0.1.0</version>
+			</dependency>
         </dependencies>
     </dependencyManagement>
 </project>
